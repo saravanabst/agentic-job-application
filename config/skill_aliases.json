@@ -1,0 +1,105 @@
+{
+  "SQL": [
+    "sql",
+    "sql queries",
+    "sql query",
+    "structured query language",
+    "database queries"
+  ],
+  "Python": [
+    "python",
+    "python programming",
+    "python scripting"
+  ],
+  "Pandas": [
+    "pandas",
+    "pandas library",
+    "python pandas"
+  ],
+  "Excel": [
+    "excel",
+    "microsoft excel",
+    "ms excel",
+    "advanced excel"
+  ],
+  "Tableau": [
+    "tableau",
+    "tableau desktop",
+    "tableau public",
+    "tableau dashboards"
+  ],
+  "Data Analysis": [
+    "data analysis",
+    "data analytics",
+    "analytics",
+    "analytical analysis"
+  ],
+  "Data Cleaning": [
+    "data cleaning",
+    "data cleansing",
+    "cleaning data",
+    "data preparation",
+    "data preprocessing"
+  ],
+  "Data Validation": [
+    "data validation",
+    "data quality",
+    "data accuracy",
+    "data integrity",
+    "quality checks"
+  ],
+  "Reporting": [
+    "reporting",
+    "reports",
+    "report generation",
+    "business reporting",
+    "management reporting"
+  ],
+  "Dashboarding": [
+    "dashboard",
+    "dashboards",
+    "dashboarding",
+    "dashboard development",
+    "interactive dashboards",
+    "business dashboards"
+  ],
+  "Business Intelligence": [
+    "business intelligence",
+    "bi",
+    "business intelligence reporting",
+    "bi reporting"
+  ],
+  "Machine Learning": [
+    "machine learning",
+    "ml",
+    "predictive modelling",
+    "predictive modeling"
+  ],
+  "Statistics": [
+    "statistics",
+    "statistical analysis",
+    "statistical modelling",
+    "statistical modeling"
+  ],
+  "Automation": [
+    "automation",
+    "process automation",
+    "report automation",
+    "workflow automation"
+  ],
+  "Git": [
+    "git",
+    "version control",
+    "source control"
+  ],
+  "GitHub": [
+    "github",
+    "github repositories",
+    "github actions"
+  ],
+  "Power BI": [
+    "power bi",
+    "powerbi",
+    "microsoft power bi"
+  ]
+}
