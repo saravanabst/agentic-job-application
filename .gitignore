@@ -1,0 +1,33 @@
+# Python virtual environment
+.venv/
+
+# Environment variables and secrets
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# Local job data
+data/raw/
+data/processed/
+
+# Generated application files
+applications/generated/
+resumes/generated/
+reports/generated/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Windows
+Thumbs.db
+Desktop.ini
