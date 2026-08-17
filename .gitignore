@@ -41,3 +41,7 @@ applications/data/
 
 # Application tracking database
 applications/data/
+
+# Private candidate information
+resumes/private/
+
