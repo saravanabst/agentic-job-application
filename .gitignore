@@ -15,11 +15,15 @@ __pycache__/
 logs/
 *.log
 
-# Local job data
+# Private candidate information
+config/job_profile.json
+config/private/
+resumes/
+applications/
 data/raw/
 data/processed/
 
-# Generated application files
+# Generated files
 applications/generated/
 resumes/generated/
 reports/generated/

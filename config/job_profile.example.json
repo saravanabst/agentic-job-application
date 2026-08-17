@@ -1,0 +1,68 @@
+{
+  "candidate": {
+    "target_role": "Data Analyst",
+    "secondary_roles": [
+      "BI Analyst",
+      "Business Intelligence Analyst",
+      "Reporting Analyst",
+      "Data and Reporting Analyst",
+      "Analytics Analyst",
+      "Business Analyst",
+      "Insights Analyst",
+      "Operations Analyst",
+      "Performance Analyst"
+    ],
+    "target_country": "TARGET_COUNTRY",
+    "preferred_locations": [
+      "TARGET_CITY_1",
+      "TARGET_CITY_2",
+      "REMOTE"
+    ],
+    "work_rights": "WORK_RIGHTS",
+    "career_level": "ENTRY_OR_MID_LEVEL"
+  },
+
+  "technical_skills": {
+    "data_analysis": [],
+    "programming": [],
+    "databases": [],
+    "visualization": [],
+    "machine_learning": [],
+    "automation": [],
+    "development_tools": [],
+    "ai": []
+  },
+
+  "portfolio_projects": [
+    {
+      "name": "Analytics Project Example",
+      "category": "Data Analytics",
+      "technologies": [],
+      "capabilities": [],
+      "business_value": []
+    }
+  ],
+
+  "job_preferences": {
+    "minimum_match_score": 70,
+    "priority_match_score": 85,
+    "preferred_work_modes": [
+      "Full-time",
+      "Hybrid",
+      "Remote"
+    ],
+    "avoid_duplicate_applications": true,
+    "human_approval_before_submission": true
+  },
+
+  "agent_strategy": {
+    "discovery": "Aggressive",
+    "filtering": "Strict",
+    "job_scoring": "AI-assisted",
+    "resume_tailoring": true,
+    "cover_letter_generation": true,
+    "application_tracking": true,
+    "automatic_submission": false,
+    "human_review_required": true
+  }
+}
