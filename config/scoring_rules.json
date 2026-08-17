@@ -1,89 +1,84 @@
 {
-  "scoring_version": "1.0",
-
-  "score_range": {
-    "minimum": 0,
-    "maximum": 100
-  },
-
-  "decision_thresholds": {
-    "priority_apply": 85,
-    "apply": 75,
-    "review": 65,
-    "low_priority": 50,
-    "ignore": 49
-  },
-
-  "weights": {
-    "role_relevance": 25,
-    "technical_skills": 25,
-    "experience_match": 15,
-    "location_and_work_mode": 10,
-    "education_match": 10,
-    "portfolio_evidence": 10,
-    "industry_fit": 5
-  },
-
-  "skill_priority": {
-    "high_priority": [
-      "SQL",
-      "Python",
-      "Pandas",
-      "Excel",
-      "Tableau",
-      "Data Analysis",
-      "Data Cleaning",
-      "Data Validation",
-      "Reporting",
-      "Dashboarding"
-    ],
-
-    "medium_priority": [
-      "MySQL",
-      "NumPy",
-      "Statistics",
-      "Hypothesis Testing",
-      "Machine Learning",
-      "Scikit-learn",
-      "Git",
-      "GitHub",
-      "Automation",
-      "Business Intelligence"
-    ],
-
-    "bonus_skills": [
-      "Generative AI",
-      "Agentic AI",
-      "Predictive Analytics",
-      "Streamlit",
-      "Power BI"
-    ]
-  },
-
-  "negative_factors": {
-    "duplicate_application": -100,
-    "already_applied": -100,
-    "work_rights_not_met": -100,
-    "clearly_unrelated_role": -100
-  },
-
-  "experience_handling": {
-    "preferred_experience_gap_tolerance_years": 2,
-    "do_not_automatically_reject_if_experience_gap": true,
-    "transferable_experience_enabled": true
-  },
-
-  "portfolio_matching": {
-    "enabled": true,
-    "farmers_market_project_weight": 5,
-    "insurance_prediction_project_weight": 5
-  },
-
-  "recommendation_rules": {
-    "priority_apply": "Strong match. Prepare application immediately.",
-    "apply": "Good match. Prepare a tailored application.",
-    "review": "Potential match. Human review required.",
-    "low_priority": "Weak match. Apply only if job has unusual advantages.",
-    "ignore": "Poor match or disqualifying condition."
-  }
+    "scoring_version": "2.0",
+    "score_range": {
+        "minimum": 0,
+        "maximum": 100
+    },
+    "decision_thresholds": {
+        "priority_apply": 85,
+        "apply": 75,
+        "review": 65,
+        "low_priority": 50,
+        "ignore": 49
+    },
+    "weights": {
+        "role_relevance": 25,
+        "technical_skills": 25,
+        "experience_match": 15,
+        "location_and_work_mode": 10,
+        "education_match": 10,
+        "portfolio_evidence": 10,
+        "industry_fit": 5
+    },
+    "conservative_scoring": {
+        "unknown_information_gets_partial_credit": true,
+        "full_score_requires_evidence": true,
+        "hard_requirement_gap_requires_review": true
+    },
+    "skill_priority": {
+        "high_priority": [
+            "SQL",
+            "Python",
+            "Pandas",
+            "Excel",
+            "Tableau",
+            "Data Analysis",
+            "Data Cleaning",
+            "Data Validation",
+            "Reporting",
+            "Dashboarding"
+        ],
+        "medium_priority": [
+            "MySQL",
+            "NumPy",
+            "Statistics",
+            "Hypothesis Testing",
+            "Machine Learning",
+            "Scikit-learn",
+            "Git",
+            "GitHub",
+            "Automation",
+            "Business Intelligence"
+        ],
+        "bonus_skills": [
+            "Generative AI",
+            "Agentic AI",
+            "Predictive Analytics",
+            "Streamlit",
+            "Power BI"
+        ]
+    },
+    "negative_factors": {
+        "duplicate_application": -100,
+        "already_applied": -100,
+        "work_rights_not_met": -100,
+        "clearly_unrelated_role": -100
+    },
+    "experience_handling": {
+        "preferred_experience_gap_tolerance_years": 2,
+        "do_not_automatically_reject_if_experience_gap": true,
+        "transferable_experience_enabled": true
+    },
+    "portfolio_matching": {
+        "enabled": true,
+        "farmers_market_project_weight": 5,
+        "insurance_prediction_project_weight": 5
+    },
+    "recommendation_rules": {
+        "priority_apply": "Strong match with no major unresolved risk.",
+        "apply": "Good match with manageable skill gaps.",
+        "review": "Potential match requiring human verification.",
+        "low_priority": "Weak match but not automatically disqualified.",
+        "ignore": "Poor match or confirmed disqualifying condition."
+    }
 }
