@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 # ============================================================
-# PROJECT PATHS
+# PATHS
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,10 +21,11 @@ TAILORING_RULES = (
     / "resume_tailoring_rules.json"
 )
 
-SKILL_ALIASES = (
+JOB_FILE = (
     BASE_DIR
-    / "config"
-    / "skill_aliases.json"
+    / "jobs"
+    / "raw"
+    / "job_001.json"
 )
 
 OUTPUT_DIR = (
@@ -34,27 +35,19 @@ OUTPUT_DIR = (
     / "tailoring"
 )
 
-JOB_FILE = (
-    BASE_DIR
-    / "jobs"
-    / "raw"
-    / "job_001.json"
-)
-
 
 # ============================================================
-# JSON LOADER
+# JSON HELPERS
 # ============================================================
 
 def load_json(file_path):
-    """Load JSON file."""
+    """Load JSON from a file."""
 
     with open(
         file_path,
         "r",
-        encoding="utf-8-sig"
+        encoding="utf-8"
     ) as file:
-
         return json.load(file)
 
 
@@ -63,7 +56,7 @@ def load_json(file_path):
 # ============================================================
 
 def normalize(text):
-    """Normalize text for reliable comparison."""
+    """Normalize text for reliable skill comparison."""
 
     return " ".join(
         str(text).lower().split()
@@ -71,40 +64,45 @@ def normalize(text):
 
 
 # ============================================================
-# SKILL ALIAS CHECK
+# SKILL ALIAS SUPPORT
 # ============================================================
 
-def contains_skill(
-    text,
-    skill,
-    aliases
-):
+def load_skill_aliases():
+    """Load skill aliases from configuration."""
+
+    aliases_file = (
+        BASE_DIR
+        / "config"
+        / "skill_aliases.json"
+    )
+
+    if not aliases_file.exists():
+        return {}
+
+    return load_json(aliases_file)
+
+
+def skill_matches_text(skill, text, aliases):
     """
     Check whether a skill or one of its aliases
-    appears in the supplied text.
+    exists in the supplied text.
     """
 
     normalized_text = normalize(text)
 
-    possible_terms = [
-        skill
-    ]
+    terms = [skill]
 
-    possible_terms.extend(
-        aliases.get(
-            skill,
-            []
-        )
+    skill_aliases = aliases.get(
+        skill,
+        []
     )
 
-    for term in possible_terms:
+    if isinstance(skill_aliases, list):
+        terms.extend(skill_aliases)
 
-        normalized_term = normalize(
-            term
-        )
+    for term in terms:
 
-        if normalized_term in normalized_text:
-
+        if normalize(term) in normalized_text:
             return True
 
     return False
@@ -119,10 +117,8 @@ def extract_job_requirements(job):
     Extract required and preferred skills.
 
     Priority:
-
-    1. Use structured requirements if present.
-    2. If structured requirements are empty,
-       extract from the job description.
+    1. Existing structured requirements
+    2. Job description text
     """
 
     requirements = job.get(
@@ -140,11 +136,8 @@ def extract_job_requirements(job):
         []
     )
 
-    # --------------------------------------------------------
-    # CASE 1:
-    # Structured requirements already exist.
-    # --------------------------------------------------------
-
+    # If structured requirements are already populated,
+    # use them.
     if required or preferred:
 
         return {
@@ -156,203 +149,171 @@ def extract_job_requirements(job):
             )
         }
 
-    # --------------------------------------------------------
-    # CASE 2:
-    # Requirements are empty.
-    #
-    # Extract from job description.
-    # --------------------------------------------------------
-
+    # Otherwise extract from job description.
     description = job.get(
         "description",
         ""
     )
 
-    aliases = load_json(
-        SKILL_ALIASES
+    aliases = load_skill_aliases()
+
+    # These are the skills currently supported
+    # by the project configuration.
+    known_skills = set()
+
+    for skill in aliases.keys():
+        known_skills.add(skill)
+
+    # Also include common skills directly.
+    known_skills.update(
+        {
+            "SQL",
+            "Python",
+            "Pandas",
+            "NumPy",
+            "Excel",
+            "Tableau",
+            "Power BI",
+            "Data Cleaning",
+            "Data Validation",
+            "Data Analysis",
+            "Reporting",
+            "Dashboarding",
+            "Business Intelligence",
+            "Machine Learning",
+            "Scikit-learn",
+            "Statistics",
+            "Hypothesis Testing",
+            "Git",
+            "GitHub",
+            "Automation"
+        }
     )
-
-    # --------------------------------------------------------
-    # Skills supported by this project.
-    # --------------------------------------------------------
-
-    known_skills = [
-
-        "SQL",
-        "Python",
-        "Pandas",
-        "NumPy",
-
-        "Excel",
-
-        "Tableau",
-        "Power BI",
-        "Matplotlib",
-
-        "Data Cleaning",
-        "Data Validation",
-        "Exploratory Data Analysis",
-        "Statistical Analysis",
-        "Hypothesis Testing",
-        "Data Interpretation",
-        "Data Analysis",
-
-        "Reporting",
-        "Dashboarding",
-        "Business Intelligence",
-
-        "Machine Learning",
-        "Scikit-learn",
-        "Regression",
-        "Classification",
-        "Feature Engineering",
-        "Model Evaluation",
-
-        "MySQL",
-
-        "Git",
-        "GitHub",
-
-        "Automation",
-
-        "Generative AI",
-        "Agentic AI"
-    ]
 
     detected = []
 
     for skill in known_skills:
 
-        if contains_skill(
-            description,
+        if skill_matches_text(
             skill,
+            description,
             aliases
         ):
-
-            detected.append(
-                skill
-            )
+            detected.append(skill)
 
     # --------------------------------------------------------
-    # Normalize description.
+    # Classify based on wording in the description.
     # --------------------------------------------------------
 
     normalized_description = normalize(
         description
     )
 
-    # --------------------------------------------------------
-    # Identify whether explicit sections exist.
-    # --------------------------------------------------------
-
-    has_required_section = any(
-        phrase in normalized_description
-        for phrase in [
-            "required skills include",
-            "required skills",
-            "requirements",
-            "must have",
-            "essential skills",
-            "essential requirements"
-        ]
-    )
-
-    has_preferred_section = any(
-        phrase in normalized_description
-        for phrase in [
-            "preferred skills include",
-            "preferred skills",
-            "nice to have",
-            "nice-to-have",
-            "desirable",
-            "bonus skills"
-        ]
-    )
-
     required = []
     preferred = []
 
-    # --------------------------------------------------------
-    # REQUIRED SKILLS
-    # --------------------------------------------------------
-    #
-    # For the current test job:
-    #
-    # Required:
-    # SQL
-    # Python
-    # Excel
-    # Tableau
-    # Data Cleaning
-    # Reporting
-    #
-    # --------------------------------------------------------
+    for skill in detected:
 
-    if has_required_section:
+        skill_found = normalize(skill)
 
-        required_candidates = [
-
-            "SQL",
-            "Python",
-            "Excel",
-            "Tableau",
-            "Data Cleaning",
-            "Reporting"
+        # Preferred wording associated with the skill.
+        preferred_patterns = [
+            f"preferred skills include {skill_found}",
+            f"preferred skill {skill_found}",
+            f"preferred: {skill_found}",
+            f"nice to have {skill_found}",
+            f"nice-to-have {skill_found}",
+            f"desirable {skill_found}",
+            f"bonus {skill_found}",
+            f"bonus skills {skill_found}",
+            f"{skill_found} is desirable",
+            f"{skill_found} are desirable"
         ]
 
-        for skill in required_candidates:
+        is_preferred = any(
+            pattern in normalized_description
+            for pattern in preferred_patterns
+        )
 
-            if skill in detected:
+        if is_preferred:
+            preferred.append(skill)
+            continue
 
-                required.append(
-                    skill
-                )
-
-    # --------------------------------------------------------
-    # PREFERRED SKILLS
-    # --------------------------------------------------------
-    #
-    # Current test job:
-    #
-    # Preferred:
-    # Power BI
-    # Machine Learning
-    #
-    # --------------------------------------------------------
-
-    if has_preferred_section:
-
-        preferred_candidates = [
-
-            "Power BI",
-            "Machine Learning",
-            "Dashboarding",
-            "Business Intelligence"
+        # General rule:
+        # Explicitly named skills in a "required" context
+        # are required.
+        required_patterns = [
+            f"required skills include {skill_found}",
+            f"required skills: {skill_found}",
+            f"required {skill_found}",
+            f"must have {skill_found}",
+            f"essential {skill_found}",
+            f"essential skills include {skill_found}",
+            f"experience with {skill_found}"
         ]
 
-        for skill in preferred_candidates:
+        is_required = any(
+            pattern in normalized_description
+            for pattern in required_patterns
+        )
 
-            if skill in detected:
-
-                preferred.append(
-                    skill
-                )
+        if is_required:
+            required.append(skill)
 
     # --------------------------------------------------------
-    # FALLBACK
+    # Special handling for common comma-separated wording.
     # --------------------------------------------------------
 
-    if not required and not preferred:
+    required_text = normalized_description
 
-        required = detected
+    if (
+        "required skills include"
+        in required_text
+    ):
+        start = required_text.find(
+            "required skills include"
+        )
+
+        section = required_text[
+            start:
+        ]
+
+        for skill in detected:
+
+            skill_name = normalize(
+                skill
+            )
+
+            if skill_name in section:
+
+                # Don't classify a skill as required
+                # if it is clearly introduced later
+                # as preferred.
+                if skill not in preferred:
+                    required.append(skill)
+
+    # --------------------------------------------------------
+    # Remove duplicates.
+    # --------------------------------------------------------
+
+    required = sorted(
+        set(required)
+    )
+
+    preferred = sorted(
+        set(preferred)
+    )
+
+    # A skill cannot be both required and preferred.
+    preferred = [
+        skill
+        for skill in preferred
+        if skill not in required
+    ]
 
     return {
-        "required": sorted(
-            set(required)
-        ),
-        "preferred": sorted(
-            set(preferred)
-        )
+        "required": required,
+        "preferred": preferred
     }
 
 
@@ -361,10 +322,7 @@ def extract_job_requirements(job):
 # ============================================================
 
 def get_candidate_skills(resume):
-    """
-    Return all technical skills
-    from the private resume profile.
-    """
+    """Return all candidate technical skills."""
 
     skills = set()
 
@@ -379,14 +337,10 @@ def get_candidate_skills(resume):
             skill_group,
             list
         ):
-
             continue
 
         for skill in skill_group:
-
-            skills.add(
-                skill
-            )
+            skills.add(skill)
 
     return skills
 
@@ -399,9 +353,9 @@ def get_project_evidence(resume):
     """
     Build:
 
-        skill -> project list
+        skill -> projects
 
-    using only verified project evidence.
+    using only candidate-provided evidence.
     """
 
     evidence = {}
@@ -425,21 +379,19 @@ def get_project_evidence(resume):
 
         for skill in demonstrated_skills:
 
-            normalized_skill = normalize(
-                skill
-            )
-
             evidence.setdefault(
-                normalized_skill,
+                normalize(skill),
                 []
             )
 
-            if project_name not in evidence[
-                normalized_skill
-            ]:
-
+            if (
+                project_name
+                not in evidence[
+                    normalize(skill)
+                ]
+            ):
                 evidence[
-                    normalized_skill
+                    normalize(skill)
                 ].append(
                     project_name
                 )
@@ -448,7 +400,7 @@ def get_project_evidence(resume):
 
 
 # ============================================================
-# SKILL MATCHING
+# MATCHING
 # ============================================================
 
 def find_matching_skills(
@@ -456,10 +408,7 @@ def find_matching_skills(
     preferred_skills,
     candidate_skills
 ):
-    """
-    Compare job requirements against
-    candidate skills.
-    """
+    """Match job requirements against candidate skills."""
 
     candidate_lookup = {
         normalize(skill): skill
@@ -472,16 +421,9 @@ def find_matching_skills(
     for skill in required_skills:
 
         if normalize(skill) in candidate_lookup:
-
-            required_matched.append(
-                skill
-            )
-
+            required_matched.append(skill)
         else:
-
-            required_gaps.append(
-                skill
-            )
+            required_gaps.append(skill)
 
     preferred_matched = []
     preferred_gaps = []
@@ -489,16 +431,9 @@ def find_matching_skills(
     for skill in preferred_skills:
 
         if normalize(skill) in candidate_lookup:
-
-            preferred_matched.append(
-                skill
-            )
-
+            preferred_matched.append(skill)
         else:
-
-            preferred_gaps.append(
-                skill
-            )
+            preferred_gaps.append(skill)
 
     return (
         required_matched,
@@ -517,10 +452,7 @@ def rank_projects(
     resume,
     rules
 ):
-    """
-    Rank portfolio projects by
-    matching verified skills.
-    """
+    """Rank projects by demonstrated skill relevance."""
 
     project_scores = []
 
@@ -561,6 +493,10 @@ def rank_projects(
                     skill
                 )
 
+        score = len(
+            matching_skills
+        )
+
         rule = project_rules.get(
             project_name,
             {}
@@ -571,16 +507,14 @@ def rank_projects(
             99
         )
 
-        relevance_score = len(
-            matching_skills
-        )
-
         project_scores.append(
             {
                 "project": project_name,
-                "relevance_score": relevance_score,
+                "relevance_score": score,
                 "default_priority": default_priority,
-                "matching_skills": matching_skills
+                "matching_skills": sorted(
+                    set(matching_skills)
+                )
             }
         )
 
@@ -603,11 +537,7 @@ def build_tailoring_plan(
     resume,
     rules
 ):
-    """Build a conservative tailoring plan."""
-
-    # --------------------------------------------------------
-    # Extract job requirements.
-    # --------------------------------------------------------
+    """Build a safe resume tailoring plan."""
 
     requirements = extract_job_requirements(
         job
@@ -621,17 +551,9 @@ def build_tailoring_plan(
         "preferred"
     ]
 
-    # --------------------------------------------------------
-    # Candidate skills.
-    # --------------------------------------------------------
-
     candidate_skills = get_candidate_skills(
         resume
     )
-
-    # --------------------------------------------------------
-    # Match skills.
-    # --------------------------------------------------------
 
     (
         required_matched,
@@ -644,18 +566,10 @@ def build_tailoring_plan(
         candidate_skills
     )
 
-    # --------------------------------------------------------
-    # All matched skills.
-    # --------------------------------------------------------
-
     all_matched = (
         required_matched
         + preferred_matched
     )
-
-    # --------------------------------------------------------
-    # Rank projects.
-    # --------------------------------------------------------
 
     project_scores = rank_projects(
         all_matched,
@@ -683,10 +597,6 @@ def build_tailoring_plan(
         :maximum_projects
     ]
 
-    # --------------------------------------------------------
-    # Skill evidence.
-    # --------------------------------------------------------
-
     evidence = get_project_evidence(
         resume
     )
@@ -702,54 +612,46 @@ def build_tailoring_plan(
 
         if projects:
 
-            skill_evidence[
-                skill
-            ] = projects
-
-    # --------------------------------------------------------
-    # Target role.
-    # --------------------------------------------------------
-
-    professional_summary = resume.get(
-        "professional_summary",
-        {}
-    )
+            skill_evidence[skill] = (
+                projects
+            )
 
     target_role = job.get(
         "title",
-        professional_summary.get(
+        resume
+        .get(
+            "professional_summary",
+            {}
+        )
+        .get(
             "target_role",
             ""
         )
     )
 
-    # --------------------------------------------------------
-    # Final plan.
-    # --------------------------------------------------------
+    safety_rules = rules.get(
+        "principles",
+        {}
+    )
 
     plan = {
 
         "tailoring_version": "4.0",
 
         "job": {
-
             "job_id": job.get(
                 "job_id",
                 ""
             ),
-
             "company": job.get(
                 "company",
                 ""
             ),
-
             "title": target_role,
-
             "location": job.get(
                 "location",
                 ""
             ),
-
             "work_mode": job.get(
                 "work_mode",
                 ""
@@ -757,17 +659,21 @@ def build_tailoring_plan(
         },
 
         "extracted_requirements": {
-
             "required": required_skills,
-
             "preferred": preferred_skills
         },
 
         "candidate": {
-
-            "target_role": professional_summary.get(
-                "target_role",
-                ""
+            "target_role": (
+                resume
+                .get(
+                    "professional_summary",
+                    {}
+                )
+                .get(
+                    "target_role",
+                    ""
+                )
             )
         },
 
@@ -802,7 +708,8 @@ def build_tailoring_plan(
 
             "professional_summary": (
                 "Emphasize the target Data Analyst "
-                "role and strongest verified skills."
+                "role and strongest verified "
+                "matched skills."
             ),
 
             "technical_skills": (
@@ -812,12 +719,14 @@ def build_tailoring_plan(
 
             "portfolio_projects": (
                 "Prioritize projects with the "
-                "strongest verified evidence."
+                "strongest verified evidence "
+                "for this job."
             ),
 
             "experience": (
                 "Use only verified candidate "
-                "experience."
+                "experience. Never invent "
+                "employment or responsibilities."
             )
         },
 
@@ -836,12 +745,7 @@ def build_tailoring_plan(
             "automatic_submission": False,
 
             "human_review_required": (
-                rules
-                .get(
-                    "principles",
-                    {}
-                )
-                .get(
+                safety_rules.get(
                     "human_review_required",
                     True
                 )
@@ -853,7 +757,7 @@ def build_tailoring_plan(
 
 
 # ============================================================
-# SAVE PLAN
+# SAVE
 # ============================================================
 
 def save_plan(plan):
@@ -892,11 +796,31 @@ def save_plan(plan):
 
 
 # ============================================================
-# PRINT PLAN
+# DISPLAY
 # ============================================================
 
+def print_list(
+    title,
+    values,
+    prefix=""
+):
+    """Print a list cleanly."""
+
+    print()
+    print(title)
+
+    if not values:
+        print("  None")
+        return
+
+    for value in values:
+        print(
+            f"  {prefix}{value}"
+        )
+
+
 def print_plan(plan):
-    """Print tailoring results."""
+    """Display tailoring plan."""
 
     print()
     print(
@@ -920,172 +844,61 @@ def print_plan(plan):
         f"{plan['job']['location']}"
     )
 
-    # --------------------------------------------------------
-    # Extracted requirements
-    # --------------------------------------------------------
-
     print()
+
     print(
         "EXTRACTED JOB REQUIREMENTS"
     )
 
-    print()
-    print("Required:")
-
-    required = plan[
-        "extracted_requirements"
-    ][
-        "required"
-    ]
-
-    if required:
-
-        for skill in required:
-
-            print(
-                f"  REQUIRED: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    print()
-    print("Preferred:")
-
-    preferred = plan[
-        "extracted_requirements"
-    ][
-        "preferred"
-    ]
-
-    if preferred:
-
-        for skill in preferred:
-
-            print(
-                f"  PREFERRED: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    # --------------------------------------------------------
-    # Required matches
-    # --------------------------------------------------------
-
-    print()
-    print(
-        "MATCHED REQUIRED SKILLS"
+    print_list(
+        "Required:",
+        plan[
+            "extracted_requirements"
+        ][
+            "required"
+        ]
     )
 
-    required_matches = plan[
-        "matched_required_skills"
-    ]
-
-    if required_matches:
-
-        for skill in required_matches:
-
-            print(
-                f"  MATCH: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    # --------------------------------------------------------
-    # Required gaps
-    # --------------------------------------------------------
-
-    print()
-    print(
-        "REQUIRED SKILL GAPS"
+    print_list(
+        "Preferred:",
+        plan[
+            "extracted_requirements"
+        ][
+            "preferred"
+        ]
     )
 
-    required_gaps = plan[
-        "required_skill_gaps"
-    ]
-
-    if required_gaps:
-
-        for skill in required_gaps:
-
-            print(
-                f"  GAP: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    # --------------------------------------------------------
-    # Preferred matches
-    # --------------------------------------------------------
-
-    print()
-    print(
-        "MATCHED PREFERRED SKILLS"
+    print_list(
+        "MATCHED REQUIRED SKILLS",
+        plan[
+            "matched_required_skills"
+        ],
+        "MATCH: "
     )
 
-    preferred_matches = plan[
-        "matched_preferred_skills"
-    ]
-
-    if preferred_matches:
-
-        for skill in preferred_matches:
-
-            print(
-                f"  MATCH: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    # --------------------------------------------------------
-    # Preferred gaps
-    # --------------------------------------------------------
-
-    print()
-    print(
-        "PREFERRED SKILL GAPS"
+    print_list(
+        "REQUIRED SKILL GAPS",
+        plan[
+            "required_skill_gaps"
+        ],
+        "GAP: "
     )
 
-    preferred_gaps = plan[
-        "preferred_skill_gaps"
-    ]
+    print_list(
+        "MATCHED PREFERRED SKILLS",
+        plan[
+            "matched_preferred_skills"
+        ],
+        "MATCH: "
+    )
 
-    if preferred_gaps:
-
-        for skill in preferred_gaps:
-
-            print(
-                f"  GAP: {skill}"
-            )
-
-    else:
-
-        print(
-            "  None"
-        )
-
-    # --------------------------------------------------------
-    # Projects
-    # --------------------------------------------------------
+    print_list(
+        "PREFERRED SKILL GAPS",
+        plan[
+            "preferred_skill_gaps"
+        ],
+        "GAP: "
+    )
 
     print()
     print(
@@ -1096,43 +909,34 @@ def print_plan(plan):
         "recommended_projects"
     ]
 
-    if projects:
+    if not projects:
 
-        for project in projects:
+        print("  None")
 
-            print()
+    for project in projects:
 
-            print(
-                f"  {project['project']}"
-            )
-
-            print(
-                f"      Relevance: "
-                f"{project['relevance_score']}"
-            )
-
-            if project[
-                "matching_skills"
-            ]:
-
-                print(
-                    "      Evidence: "
-                    + ", ".join(
-                        project[
-                            "matching_skills"
-                        ]
-                    )
-                )
-
-    else:
-
+        print()
         print(
-            "  None"
+            f"  {project['project']}"
         )
 
-    # --------------------------------------------------------
-    # Skill evidence
-    # --------------------------------------------------------
+        print(
+            f"      Relevance: "
+            f"{project['relevance_score']}"
+        )
+
+        if project[
+            "matching_skills"
+        ]:
+
+            print(
+                "      Evidence: "
+                + ", ".join(
+                    project[
+                        "matching_skills"
+                    ]
+                )
+            )
 
     print()
     print(
@@ -1143,29 +947,21 @@ def print_plan(plan):
         "skill_evidence"
     ]
 
-    if evidence:
+    if not evidence:
 
-        for skill, projects in evidence.items():
+        print("  None")
 
-            print(
-                f"  {skill}:"
-            )
-
-            for project in projects:
-
-                print(
-                    f"      -> {project}"
-                )
-
-    else:
+    for skill, projects in evidence.items():
 
         print(
-            "  None"
+            f"  {skill}:"
         )
 
-    # --------------------------------------------------------
-    # Safety
-    # --------------------------------------------------------
+        for project in projects:
+
+            print(
+                f"      -> {project}"
+            )
 
     print()
     print(
@@ -1225,34 +1021,57 @@ def main():
     print("=" * 60)
 
     # --------------------------------------------------------
-    # Check required files
+    # Check private resume
     # --------------------------------------------------------
 
-    required_files = [
+    if not PRIVATE_RESUME.exists():
 
-        PRIVATE_RESUME,
+        print()
+        print(
+            "ERROR: Private resume profile "
+            "was not found."
+        )
 
-        TAILORING_RULES,
+        print(
+            PRIVATE_RESUME
+        )
 
-        SKILL_ALIASES,
+        return
 
-        JOB_FILE
-    ]
+    # --------------------------------------------------------
+    # Check tailoring rules
+    # --------------------------------------------------------
 
-    for file_path in required_files:
+    if not TAILORING_RULES.exists():
 
-        if not file_path.exists():
+        print()
+        print(
+            "ERROR: Resume tailoring rules "
+            "were not found."
+        )
 
-            print()
-            print(
-                "ERROR: Required file not found:"
-            )
+        print(
+            TAILORING_RULES
+        )
 
-            print(
-                file_path
-            )
+        return
 
-            return
+    # --------------------------------------------------------
+    # Check test job
+    # --------------------------------------------------------
+
+    if not JOB_FILE.exists():
+
+        print()
+        print(
+            "ERROR: Test job was not found."
+        )
+
+        print(
+            JOB_FILE
+        )
+
+        return
 
     # --------------------------------------------------------
     # Load files
@@ -1271,7 +1090,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Build tailoring plan
+    # Build plan
     # --------------------------------------------------------
 
     plan = build_tailoring_plan(
@@ -1281,7 +1100,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Print plan
+    # Display
     # --------------------------------------------------------
 
     print_plan(
@@ -1289,7 +1108,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Save private plan
+    # Save
     # --------------------------------------------------------
 
     output_file = save_plan(
@@ -1306,10 +1125,5 @@ def main():
     )
 
 
-# ============================================================
-# PROGRAM ENTRY POINT
-# ============================================================
-
 if __name__ == "__main__":
-
     main()
