@@ -2,10 +2,17 @@ import json
 from pathlib import Path
 
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.style import WD_STYLE_TYPE
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+
+# ============================================================
+# VERSION 8
+# ATS-FRIENDLY RESUME GENERATOR
+# ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -31,8 +38,33 @@ OUTPUT_DIR = (
 )
 
 
+# ============================================================
+# DESIGN SETTINGS
+# ============================================================
+
+FONT_NAME = "Arial"
+
+NAVY = RGBColor(31, 78, 121)
+BLUE = RGBColor(5, 99, 193)
+BLACK = RGBColor(0, 0, 0)
+DARK_GRAY = RGBColor(64, 64, 64)
+
+BODY_SIZE = 10
+SMALL_SIZE = 9
+NAME_SIZE = 18
+DESIGNATION_SIZE = 10.5
+SECTION_SIZE = 11.5
+SUBHEADING_SIZE = 10.5
+
+LINE_SPACING = 1.12
+
+
+# ============================================================
+# JSON HELPERS
+# ============================================================
+
 def load_json(file_path):
-    """Load JSON file."""
+    """Load JSON data."""
 
     with open(
         file_path,
@@ -42,8 +74,71 @@ def load_json(file_path):
         return json.load(file)
 
 
+# ============================================================
+# FONT HELPERS
+# ============================================================
+
+def set_run_font(
+    run,
+    size=BODY_SIZE,
+    bold=False,
+    color=BLACK,
+    italic=False,
+    underline=False
+):
+    """Apply consistent font settings to a run."""
+
+    run.font.name = FONT_NAME
+
+    run._element.rPr.rFonts.set(
+        qn("w:ascii"),
+        FONT_NAME
+    )
+
+    run._element.rPr.rFonts.set(
+        qn("w:hAnsi"),
+        FONT_NAME
+    )
+
+    run._element.rPr.rFonts.set(
+        qn("w:eastAsia"),
+        FONT_NAME
+    )
+
+    run.font.size = Pt(size)
+    run.bold = bold
+    run.italic = italic
+    run.underline = underline
+    run.font.color.rgb = color
+
+
+def set_paragraph_spacing(
+    paragraph,
+    before=0,
+    after=4,
+    line_spacing=LINE_SPACING
+):
+    """Apply consistent paragraph spacing."""
+
+    paragraph.paragraph_format.space_before = Pt(
+        before
+    )
+
+    paragraph.paragraph_format.space_after = Pt(
+        after
+    )
+
+    paragraph.paragraph_format.line_spacing = (
+        line_spacing
+    )
+
+
+# ============================================================
+# DOCUMENT SETUP
+# ============================================================
+
 def setup_document():
-    """Create an ATS-friendly Word document."""
+    """Create the ATS-friendly Word document."""
 
     document = Document()
 
@@ -51,155 +146,710 @@ def setup_document():
 
     section.top_margin = Inches(0.55)
     section.bottom_margin = Inches(0.55)
-    section.left_margin = Inches(0.65)
-    section.right_margin = Inches(0.65)
+    section.left_margin = Inches(0.68)
+    section.right_margin = Inches(0.68)
 
     styles = document.styles
 
     normal = styles["Normal"]
 
-    normal.font.name = "Arial"
+    normal.font.name = FONT_NAME
+
+    normal._element.rPr.rFonts.set(
+        qn("w:ascii"),
+        FONT_NAME
+    )
+
+    normal._element.rPr.rFonts.set(
+        qn("w:hAnsi"),
+        FONT_NAME
+    )
+
     normal._element.rPr.rFonts.set(
         qn("w:eastAsia"),
-        "Arial"
+        FONT_NAME
     )
-    normal.font.size = Pt(9.5)
+
+    normal.font.size = Pt(BODY_SIZE)
+
+    normal.paragraph_format.space_after = Pt(4)
+    normal.paragraph_format.line_spacing = LINE_SPACING
 
     return document
 
+
+# ============================================================
+# DIVIDER LINE
+# ============================================================
+
+def add_top_border(paragraph):
+    """
+    Add a thin divider line ABOVE the section heading.
+
+    This keeps the line visually attached to the section,
+    rather than placing it below the heading.
+    """
+
+    p = paragraph._p
+
+    pPr = p.get_or_add_pPr()
+
+    pBdr = pPr.find(
+        qn("w:pBdr")
+    )
+
+    if pBdr is None:
+        pBdr = OxmlElement("w:pBdr")
+        pPr.append(pBdr)
+
+    top = OxmlElement("w:top")
+
+    top.set(
+        qn("w:val"),
+        "single"
+    )
+
+    top.set(
+        qn("w:sz"),
+        "8"
+    )
+
+    top.set(
+        qn("w:space"),
+        "5"
+    )
+
+    top.set(
+        qn("w:color"),
+        "1F4E79"
+    )
+
+    pBdr.append(top)
+
+
+# ============================================================
+# HYPERLINK
+# ============================================================
+
+def add_hyperlink(
+    paragraph,
+    text,
+    url
+):
+    """
+    Add ATS-readable hyperlink.
+
+    The visible URL remains text so ATS systems can
+    still read the LinkedIn/GitHub address.
+    """
+
+    if not url:
+        return
+
+    part = paragraph.part
+
+    relationship_id = part.relate_to(
+        url,
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+        is_external=True
+    )
+
+    hyperlink = OxmlElement("w:hyperlink")
+
+    hyperlink.set(
+        qn("r:id"),
+        relationship_id
+    )
+
+    new_run = OxmlElement("w:r")
+
+    rPr = OxmlElement("w:rPr")
+
+    color = OxmlElement("w:color")
+    color.set(
+        qn("w:val"),
+        "0563C1"
+    )
+    rPr.append(color)
+
+    underline = OxmlElement("w:u")
+    underline.set(
+        qn("w:val"),
+        "single"
+    )
+    rPr.append(underline)
+
+    rFonts = OxmlElement("w:rFonts")
+    rFonts.set(
+        qn("w:ascii"),
+        FONT_NAME
+    )
+    rFonts.set(
+        qn("w:hAnsi"),
+        FONT_NAME
+    )
+    rFonts.set(
+        qn("w:eastAsia"),
+        FONT_NAME
+    )
+    rPr.append(rFonts)
+
+    size = OxmlElement("w:sz")
+    size.set(
+        qn("w:val"),
+        "18"
+    )
+    rPr.append(size)
+
+    new_run.append(rPr)
+
+    text_element = OxmlElement("w:t")
+    text_element.text = text
+
+    new_run.append(text_element)
+
+    hyperlink.append(new_run)
+
+    paragraph._p.append(hyperlink)
+
+
+# ============================================================
+# STANDARD TEXT
+# ============================================================
 
 def add_text(
     document,
     text,
     bold=False,
-    size=9.5,
-    alignment=None,
-    space_after=2
+    size=BODY_SIZE,
+    color=BLACK,
+    alignment=WD_ALIGN_PARAGRAPH.LEFT,
+    before=0,
+    after=4,
+    line_spacing=LINE_SPACING
 ):
-    """Add standard ATS-safe paragraph."""
+    """Add a normal ATS-safe paragraph."""
 
     paragraph = document.add_paragraph()
 
-    paragraph.paragraph_format.space_after = Pt(
-        space_after
+    paragraph.alignment = alignment
+
+    set_paragraph_spacing(
+        paragraph,
+        before=before,
+        after=after,
+        line_spacing=line_spacing
     )
-
-    paragraph.paragraph_format.line_spacing = 1.0
-
-    if alignment is not None:
-        paragraph.alignment = alignment
 
     run = paragraph.add_run(
         str(text)
     )
 
-    run.bold = bold
-    run.font.name = "Arial"
-    run._element.rPr.rFonts.set(
-        qn("w:eastAsia"),
-        "Arial"
+    set_run_font(
+        run,
+        size=size,
+        bold=bold,
+        color=color
     )
-    run.font.size = Pt(size)
 
     return paragraph
 
 
-def add_heading(
+# ============================================================
+# JUSTIFIED PARAGRAPH
+# ============================================================
+
+def add_justified_paragraph(
     document,
-    text
+    text,
+    size=BODY_SIZE,
+    before=0,
+    after=7
 ):
-    """Add ATS-friendly section heading."""
+    """Add a professionally justified paragraph."""
+
+    if not text:
+        return None
 
     paragraph = document.add_paragraph()
 
-    paragraph.paragraph_format.space_before = Pt(8)
-    paragraph.paragraph_format.space_after = Pt(3)
+    paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.JUSTIFY
+    )
+
+    set_paragraph_spacing(
+        paragraph,
+        before=before,
+        after=after,
+        line_spacing=1.15
+    )
+
+    run = paragraph.add_run(
+        str(text)
+    )
+
+    set_run_font(
+        run,
+        size=size,
+        color=BLACK
+    )
+
+    return paragraph
+
+
+# ============================================================
+# SECTION HEADING
+# ============================================================
+
+def add_section_heading(
+    document,
+    text
+):
+    """
+    Add section divider ABOVE heading.
+
+    Layout:
+
+    ------------------------------
+    PROFESSIONAL SUMMARY
+
+    Description...
+    """
+
+    paragraph = document.add_paragraph()
+
+    paragraph.paragraph_format.space_before = Pt(7)
+    paragraph.paragraph_format.space_after = Pt(5)
+    paragraph.paragraph_format.line_spacing = 1.0
+
+    add_top_border(
+        paragraph
+    )
 
     run = paragraph.add_run(
         text.upper()
     )
 
-    run.bold = True
-    run.font.name = "Arial"
-    run._element.rPr.rFonts.set(
-        qn("w:eastAsia"),
-        "Arial"
+    set_run_font(
+        run,
+        size=SECTION_SIZE,
+        bold=True,
+        color=NAVY
     )
-    run.font.size = Pt(11)
 
     return paragraph
 
+
+# ============================================================
+# SUBHEADING
+# ============================================================
+
+def add_subheading(
+    document,
+    text,
+    after=4
+):
+    """Add professional subheading."""
+
+    paragraph = document.add_paragraph()
+
+    paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.LEFT
+    )
+
+    set_paragraph_spacing(
+        paragraph,
+        before=2,
+        after=after,
+        line_spacing=1.0
+    )
+
+    run = paragraph.add_run(
+        str(text)
+    )
+
+    set_run_font(
+        run,
+        size=SUBHEADING_SIZE,
+        bold=True,
+        color=NAVY
+    )
+
+    return paragraph
+
+
+# ============================================================
+# BULLET
+# ============================================================
 
 def add_bullet(
     document,
     text
 ):
-    """Add simple ATS-safe bullet."""
+    """Add ATS-safe bullet with comfortable spacing."""
 
     paragraph = document.add_paragraph()
 
-    paragraph.paragraph_format.left_indent = Inches(
-        0.18
+    paragraph.paragraph_format.left_indent = (
+        Inches(0.18)
     )
 
-    paragraph.paragraph_format.first_line_indent = Inches(
-        -0.12
+    paragraph.paragraph_format.first_line_indent = (
+        Inches(-0.12)
     )
 
-    paragraph.paragraph_format.space_after = Pt(
-        2
-    )
-
-    paragraph.paragraph_format.line_spacing = 1.0
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(4)
+    paragraph.paragraph_format.line_spacing = 1.12
 
     run = paragraph.add_run(
-        "• " + str(text)
+        "\u2022 "
+        + str(text)
     )
 
-    run.font.name = "Arial"
-    run._element.rPr.rFonts.set(
-        qn("w:eastAsia"),
-        "Arial"
+    set_run_font(
+        run,
+        size=BODY_SIZE,
+        color=BLACK
     )
-    run.font.size = Pt(9.5)
 
     return paragraph
 
+
+# ============================================================
+# LABEL + VALUE
+# ============================================================
 
 def add_label_value(
     document,
     label,
     value
 ):
-    """Add a labelled line."""
+    """Add bold label followed by normal text."""
 
     paragraph = document.add_paragraph()
 
-    paragraph.paragraph_format.space_after = Pt(2)
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(5)
+    paragraph.paragraph_format.line_spacing = 1.12
 
     label_run = paragraph.add_run(
-        label
+        str(label)
     )
 
-    label_run.bold = True
-    label_run.font.name = "Arial"
-    label_run.font.size = Pt(9.5)
+    set_run_font(
+        label_run,
+        size=BODY_SIZE,
+        bold=True,
+        color=NAVY
+    )
 
     value_run = paragraph.add_run(
         str(value)
     )
 
-    value_run.font.name = "Arial"
-    value_run.font.size = Pt(9.5)
+    set_run_font(
+        value_run,
+        size=BODY_SIZE,
+        color=BLACK
+    )
 
     return paragraph
 
+
+# ============================================================
+# PERSONAL HEADER
+# ============================================================
+
+def add_personal_header(
+    document,
+    resume
+):
+    """
+    Header layout:
+
+    SARAVANAKUMAR KANNAN
+
+    DATA ANALYST | AUCKLAND, NEW ZEALAND
+
+    Email | Phone | LinkedIn | GitHub
+    """
+
+    personal = resume.get(
+        "personal",
+        {}
+    )
+
+    professional = resume.get(
+        "professional_summary",
+        {}
+    )
+
+    name = personal.get(
+        "full_name",
+        ""
+    )
+
+    target_role = professional.get(
+        "target_role",
+        "Data Analyst"
+    )
+
+    location = personal.get(
+        "location",
+        ""
+    )
+
+    # --------------------------------------------------------
+    # NAME
+    # --------------------------------------------------------
+
+    paragraph = document.add_paragraph()
+
+    paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(2)
+    paragraph.paragraph_format.line_spacing = 1.0
+
+    run = paragraph.add_run(
+        name
+    )
+
+    set_run_font(
+        run,
+        size=NAME_SIZE,
+        bold=True,
+        color=NAVY
+    )
+
+    # --------------------------------------------------------
+    # DESIGNATION + LOCATION SAME LINE
+    # --------------------------------------------------------
+
+    paragraph = document.add_paragraph()
+
+    paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(6)
+    paragraph.paragraph_format.line_spacing = 1.0
+
+    designation_run = paragraph.add_run(
+        target_role.upper()
+    )
+
+    set_run_font(
+        designation_run,
+        size=DESIGNATION_SIZE,
+        bold=True,
+        color=BLACK
+    )
+
+    if location:
+
+        separator_run = paragraph.add_run(
+            "  |  "
+        )
+
+        set_run_font(
+            separator_run,
+            size=DESIGNATION_SIZE,
+            color=DARK_GRAY
+        )
+
+        location_run = paragraph.add_run(
+            location
+        )
+
+        set_run_font(
+            location_run,
+            size=DESIGNATION_SIZE,
+            color=DARK_GRAY
+        )
+
+    # --------------------------------------------------------
+    # CONTACT INFORMATION
+    # --------------------------------------------------------
+
+    paragraph = document.add_paragraph()
+
+    paragraph.alignment = (
+        WD_ALIGN_PARAGRAPH.CENTER
+    )
+
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(8)
+    paragraph.paragraph_format.line_spacing = 1.0
+
+    contact_items = []
+
+    email = personal.get(
+        "email",
+        ""
+    )
+
+    phone = personal.get(
+        "phone",
+        ""
+    )
+
+    linkedin = personal.get(
+        "linkedin_url",
+        ""
+    )
+
+    github = personal.get(
+        "github_url",
+        ""
+    )
+
+    if email:
+
+        run = paragraph.add_run(
+            "Email: "
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            bold=True,
+            color=DARK_GRAY
+        )
+
+        run = paragraph.add_run(
+            email
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            color=BLACK
+        )
+
+        contact_items.append(
+            "email"
+        )
+
+    if phone:
+
+        if contact_items:
+
+            run = paragraph.add_run(
+                "  |  "
+            )
+
+            set_run_font(
+                run,
+                size=SMALL_SIZE,
+                color=DARK_GRAY
+            )
+
+        run = paragraph.add_run(
+            "Phone: "
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            bold=True,
+            color=DARK_GRAY
+        )
+
+        run = paragraph.add_run(
+            phone
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            color=BLACK
+        )
+
+        contact_items.append(
+            "phone"
+        )
+
+    if linkedin:
+
+        if contact_items:
+
+            run = paragraph.add_run(
+                "  |  "
+            )
+
+            set_run_font(
+                run,
+                size=SMALL_SIZE,
+                color=DARK_GRAY
+            )
+
+        run = paragraph.add_run(
+            "LinkedIn: "
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            bold=True,
+            color=DARK_GRAY
+        )
+
+        add_hyperlink(
+            paragraph,
+            linkedin,
+            linkedin
+        )
+
+        contact_items.append(
+            "linkedin"
+        )
+
+    if github:
+
+        if contact_items:
+
+            run = paragraph.add_run(
+                "  |  "
+            )
+
+            set_run_font(
+                run,
+                size=SMALL_SIZE,
+                color=DARK_GRAY
+            )
+
+        run = paragraph.add_run(
+            "GitHub: "
+        )
+
+        set_run_font(
+            run,
+            size=SMALL_SIZE,
+            bold=True,
+            color=DARK_GRAY
+        )
+
+        add_hyperlink(
+            paragraph,
+            github,
+            github
+        )
+
+
+# ============================================================
+# PROFESSIONAL SUMMARY
+# ============================================================
 
 def build_professional_summary(
     resume,
     tailoring
 ):
-    """Build conservative job-targeted summary."""
+    """Build verified targeted summary."""
 
     summary_data = resume.get(
         "professional_summary",
@@ -209,7 +859,7 @@ def build_professional_summary(
     base_summary = summary_data.get(
         "summary",
         ""
-    )
+    ).strip()
 
     matched_required = tailoring.get(
         "matched_required_skills",
@@ -226,182 +876,28 @@ def build_professional_summary(
         + matched_preferred
     )
 
-    if matched:
+    if not base_summary and matched:
 
-        skills_text = ", ".join(
-            matched
+        return (
+            "Analytical and results-driven "
+            "Data Analyst with hands-on "
+            "experience applying "
+            + ", ".join(matched)
+            + " through practical analytics "
+              "projects."
         )
+
+    if base_summary and matched:
 
         return (
             base_summary
             + " Experienced in applying "
-            + skills_text
+            + ", ".join(matched)
             + " through practical analytics "
-              "and portfolio projects."
+              "projects."
         )
 
     return base_summary
-
-
-def get_project_map(resume):
-    """Create project lookup."""
-
-    project_map = {}
-
-    for project in resume.get(
-        "portfolio_projects",
-        []
-    ):
-
-        project_map[
-            project.get("name", "")
-        ] = project
-
-    return project_map
-
-
-def select_projects(
-    resume,
-    tailoring
-):
-    """Select the strongest verified projects."""
-
-    project_map = get_project_map(
-        resume
-    )
-
-    recommendations = tailoring.get(
-        "recommended_projects",
-        []
-    )
-
-    selected = []
-
-    for recommendation in recommendations:
-
-        project_name = recommendation.get(
-            "project",
-            ""
-        )
-
-        project = project_map.get(
-            project_name
-        )
-
-        if project:
-            selected.append(
-                (
-                    project,
-                    recommendation
-                )
-            )
-
-    if selected:
-        return selected
-
-    return [
-        (
-            project,
-            {
-                "relevance_score": 0,
-                "matching_skills": []
-            }
-        )
-        for project in resume.get(
-            "portfolio_projects",
-            []
-        )[:3]
-    ]
-
-
-def add_personal_header(
-    document,
-    resume
-):
-    """Add resume header."""
-
-    personal = resume.get(
-        "personal",
-        {}
-    )
-
-    name = personal.get(
-        "full_name",
-        ""
-    )
-
-    paragraph = document.add_paragraph()
-
-    paragraph.alignment = (
-        WD_ALIGN_PARAGRAPH.CENTER
-    )
-
-    paragraph.paragraph_format.space_after = Pt(
-        2
-    )
-
-    run = paragraph.add_run(
-        name
-    )
-
-    run.bold = True
-    run.font.name = "Arial"
-    run._element.rPr.rFonts.set(
-        qn("w:eastAsia"),
-        "Arial"
-    )
-    run.font.size = Pt(16)
-
-    target_role = resume.get(
-        "professional_summary",
-        {}
-    ).get(
-        "target_role",
-        "Data Analyst"
-    )
-
-    add_text(
-        document,
-        target_role.upper(),
-        bold=True,
-        size=10,
-        alignment=WD_ALIGN_PARAGRAPH.CENTER,
-        space_after=3
-    )
-
-    contact_items = []
-
-    if personal.get("email"):
-        contact_items.append(
-            "Email: "
-            + personal["email"]
-        )
-
-    if personal.get("phone"):
-        contact_items.append(
-            "Phone: "
-            + personal["phone"]
-        )
-
-    if personal.get("location"):
-        contact_items.append(
-            "Location: "
-            + personal["location"]
-        )
-
-    if personal.get("linkedin_url"):
-        contact_items.append(
-            "LinkedIn: "
-            + personal["linkedin_url"]
-        )
-
-    add_text(
-        document,
-        " | ".join(contact_items),
-        size=8.5,
-        alignment=WD_ALIGN_PARAGRAPH.CENTER,
-        space_after=5
-    )
 
 
 def add_professional_summary(
@@ -411,7 +907,7 @@ def add_professional_summary(
 ):
     """Add professional summary."""
 
-    add_heading(
+    add_section_heading(
         document,
         "Professional Summary"
     )
@@ -421,21 +917,28 @@ def add_professional_summary(
         tailoring
     )
 
-    add_text(
-        document,
-        summary,
-        size=9.5,
-        space_after=4
-    )
+    if summary:
 
+        add_justified_paragraph(
+            document,
+            summary,
+            size=BODY_SIZE,
+            after=8
+        )
+
+
+# ============================================================
+# CORE SKILLS
+# ============================================================
 
 def add_core_skills(
     document,
-    resume
+    resume,
+    tailoring
 ):
-    """Add keyword-rich core skills."""
+    """Add targeted ATS keyword skills."""
 
-    add_heading(
+    add_section_heading(
         document,
         "Core Skills"
     )
@@ -444,6 +947,16 @@ def add_core_skills(
         "technical_skills",
         {}
     )
+
+    candidate_skills = set()
+
+    for group in skills.values():
+
+        for skill in group:
+
+            candidate_skills.add(
+                skill.lower()
+            )
 
     categories = {
         "Business Analysis": [
@@ -469,6 +982,7 @@ def add_core_skills(
         ],
         "Business Intelligence": [
             "Tableau",
+            "Excel",
             "Advanced Excel",
             "PivotTables",
             "Dashboards",
@@ -486,14 +1000,17 @@ def add_core_skills(
         ]
     }
 
-    all_candidate_skills = set()
+    priority_skills = (
+        tailoring.get(
+            "priority_skills",
+            []
+        )
+    )
 
-    for group in skills.values():
-
-        for skill in group:
-            all_candidate_skills.add(
-                skill.lower()
-            )
+    priority_lookup = {
+        skill.lower()
+        for skill in priority_skills
+    }
 
     for category, category_skills in categories.items():
 
@@ -501,8 +1018,17 @@ def add_core_skills(
 
         for skill in category_skills:
 
-            if skill.lower() in all_candidate_skills:
+            if skill.lower() in candidate_skills:
                 verified.append(skill)
+
+        # Put job-matched skills first.
+        verified.sort(
+            key=lambda skill: (
+                0
+                if skill.lower() in priority_lookup
+                else 1
+            )
+        )
 
         if verified:
 
@@ -512,6 +1038,10 @@ def add_core_skills(
                 " • ".join(verified)
             )
 
+
+# ============================================================
+# EXPERIENCE
+# ============================================================
 
 def add_experience(
     document,
@@ -524,23 +1054,37 @@ def add_experience(
         []
     )
 
-    if not experience:
+    valid_experience = [
+        item
+        for item in experience
+        if item.get("company")
+        or item.get("job_title")
+    ]
+
+    if not valid_experience:
         return
 
-    add_heading(
+    add_section_heading(
         document,
         "Professional Experience"
     )
 
-    for role in experience:
+    for index, role in enumerate(
+        valid_experience
+    ):
+
+        title = role.get(
+            "job_title",
+            ""
+        )
 
         company = role.get(
             "company",
             ""
         )
 
-        title = role.get(
-            "job_title",
+        location = role.get(
+            "location",
             ""
         )
 
@@ -554,88 +1098,238 @@ def add_experience(
             ""
         )
 
-        location = role.get(
-            "location",
-            ""
+        current = role.get(
+            "current",
+            False
         )
 
-        date_text = ""
+        if current:
+            date_text = (
+                start
+                + "–Present"
+                if start
+                else "Present"
+            )
 
-        if start and end:
+        elif start and end:
+
             date_text = (
                 start
                 + "–"
                 + end
             )
-        elif start:
-            date_text = start
 
-        header = title
+        else:
+
+            date_text = (
+                start
+                or end
+            )
+
+        # ----------------------------------------------------
+        # JOB TITLE
+        # ----------------------------------------------------
+
+        header_parts = []
+
+        if title:
+            header_parts.append(
+                title
+            )
 
         if company:
-            header += (
-                " | "
-                + company
+            header_parts.append(
+                company
+            )
+
+        header_text = " | ".join(
+            header_parts
+        )
+
+        add_subheading(
+            document,
+            header_text,
+            after=2
+        )
+
+        # ----------------------------------------------------
+        # LOCATION + DATES
+        # ----------------------------------------------------
+
+        metadata = []
+
+        if location:
+            metadata.append(
+                location
             )
 
         if date_text:
-            header += (
-                " | "
-                + date_text
+            metadata.append(
+                date_text
             )
 
-        add_text(
-            document,
-            header,
-            bold=True,
-            size=10,
-            space_after=1
-        )
+        if metadata:
 
-        if location:
-            add_text(
-                document,
-                location,
-                size=8.5,
-                space_after=2
+            paragraph = document.add_paragraph()
+
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(6)
+            paragraph.paragraph_format.line_spacing = 1.0
+
+            run = paragraph.add_run(
+                " | ".join(metadata)
             )
+
+            set_run_font(
+                run,
+                size=SMALL_SIZE,
+                italic=True,
+                color=DARK_GRAY
+            )
+
+        # ----------------------------------------------------
+        # RESPONSIBILITIES
+        # ----------------------------------------------------
 
         for responsibility in role.get(
             "responsibilities",
             []
         ):
 
-            add_bullet(
-                document,
-                responsibility
-            )
+            if responsibility:
+
+                add_bullet(
+                    document,
+                    responsibility
+                )
+
+        # ----------------------------------------------------
+        # ACHIEVEMENTS
+        # ----------------------------------------------------
 
         for achievement in role.get(
             "achievements",
             []
         ):
 
-            add_bullet(
-                document,
-                achievement
+            if achievement:
+
+                add_bullet(
+                    document,
+                    achievement
+                )
+
+        if index < len(valid_experience) - 1:
+
+            spacer = document.add_paragraph()
+
+            spacer.paragraph_format.space_after = Pt(2)
+
+
+# ============================================================
+# PROJECT HELPERS
+# ============================================================
+
+def get_project_map(resume):
+    """Create project lookup."""
+
+    project_map = {}
+
+    for project in resume.get(
+        "portfolio_projects",
+        []
+    ):
+
+        name = project.get(
+            "name",
+            ""
+        )
+
+        if name:
+
+            project_map[name] = project
+
+    return project_map
+
+
+def select_projects(
+    resume,
+    tailoring
+):
+    """Select strongest verified projects."""
+
+    project_map = get_project_map(
+        resume
+    )
+
+    recommendations = tailoring.get(
+        "recommended_projects",
+        []
+    )
+
+    selected = []
+
+    for recommendation in recommendations:
+
+        project_name = recommendation.get(
+            "project",
+            ""
+        )
+
+        project = project_map.get(
+            project_name
+        )
+
+        if project:
+
+            selected.append(
+                (
+                    project,
+                    recommendation
+                )
             )
 
+    if selected:
+
+        return selected
+
+    return [
+        (
+            project,
+            {
+                "relevance_score": 0,
+                "matching_skills": []
+            }
+        )
+        for project in resume.get(
+            "portfolio_projects",
+            []
+        )[:3]
+    ]
+
+
+# ============================================================
+# PROJECTS
+# ============================================================
 
 def add_projects(
     document,
     resume,
     tailoring
 ):
-    """Add selected data analytics projects."""
-
-    add_heading(
-        document,
-        "Selected Data Analytics Projects"
-    )
+    """Add selected analytics projects."""
 
     selected_projects = select_projects(
         resume,
         tailoring
+    )
+
+    if not selected_projects:
+        return
+
+    add_section_heading(
+        document,
+        "Selected Data Analytics Projects"
     )
 
     for project, recommendation in selected_projects:
@@ -661,24 +1355,74 @@ def add_projects(
                 )
             )
 
-        add_text(
+        add_subheading(
             document,
             title,
-            bold=True,
-            size=10,
-            space_after=2
+            after=5
         )
 
-        for achievement in project.get(
+        # ----------------------------------------------------
+        # Project description / achievements
+        # ----------------------------------------------------
+
+        achievements = project.get(
             "achievements",
             []
-        ):
+        )
 
-            add_bullet(
-                document,
-                achievement
+        for achievement in achievements:
+
+            if achievement:
+
+                add_bullet(
+                    document,
+                    achievement
+                )
+
+        # ----------------------------------------------------
+        # Matching evidence
+        # ----------------------------------------------------
+
+        matching_skills = recommendation.get(
+            "matching_skills",
+            []
+        )
+
+        if matching_skills:
+
+            paragraph = document.add_paragraph()
+
+            paragraph.paragraph_format.space_before = Pt(1)
+            paragraph.paragraph_format.space_after = Pt(6)
+            paragraph.paragraph_format.line_spacing = 1.0
+
+            label_run = paragraph.add_run(
+                "Relevant skills: "
             )
 
+            set_run_font(
+                label_run,
+                size=SMALL_SIZE,
+                bold=True,
+                color=NAVY
+            )
+
+            value_run = paragraph.add_run(
+                ", ".join(
+                    matching_skills
+                )
+            )
+
+            set_run_font(
+                value_run,
+                size=SMALL_SIZE,
+                color=DARK_GRAY
+            )
+
+
+# ============================================================
+# EDUCATION
+# ============================================================
 
 def add_education(
     document,
@@ -691,15 +1435,21 @@ def add_education(
         []
     )
 
-    if not education:
+    valid_education = [
+        item
+        for item in education
+        if item.get("qualification")
+    ]
+
+    if not valid_education:
         return
 
-    add_heading(
+    add_section_heading(
         document,
         "Education"
     )
 
-    for item in education:
+    for item in valid_education:
 
         qualification = item.get(
             "qualification",
@@ -716,46 +1466,79 @@ def add_education(
             ""
         )
 
+        status = item.get(
+            "status",
+            ""
+        )
+
         line = qualification
 
         if specialization:
+
             line += (
                 " — "
                 + specialization
             )
 
-        add_text(
+        add_subheading(
             document,
             line,
-            bold=True,
-            size=9.5,
-            space_after=1
+            after=2
         )
 
-        if institution:
+        metadata = []
 
-            add_text(
-                document,
-                institution,
-                size=9,
-                space_after=3
+        if institution:
+            metadata.append(
+                institution
+            )
+
+        if status:
+            metadata.append(
+                status
+            )
+
+        if metadata:
+
+            paragraph = document.add_paragraph()
+
+            paragraph.paragraph_format.space_before = Pt(0)
+            paragraph.paragraph_format.space_after = Pt(6)
+            paragraph.paragraph_format.line_spacing = 1.0
+
+            run = paragraph.add_run(
+                " | ".join(metadata)
+            )
+
+            set_run_font(
+                run,
+                size=SMALL_SIZE,
+                color=DARK_GRAY
             )
 
 
+# ============================================================
+# TECHNICAL SKILLS
+# ============================================================
+
 def add_technical_skills(
     document,
-    resume
+    resume,
+    tailoring
 ):
-    """Add complete verified technical skills."""
-
-    add_heading(
-        document,
-        "Technical Skills"
-    )
+    """Add verified technical skills."""
 
     skills = resume.get(
         "technical_skills",
         {}
+    )
+
+    if not skills:
+        return
+
+    add_section_heading(
+        document,
+        "Technical Skills"
     )
 
     labels = {
@@ -769,10 +1552,31 @@ def add_technical_skills(
         "ai": "Artificial Intelligence"
     }
 
+    priority_skills = tailoring.get(
+        "priority_skills",
+        []
+    )
+
+    priority_lookup = {
+        skill.lower()
+        for skill in priority_skills
+    }
+
     for category, items in skills.items():
 
         if not items:
             continue
+
+        ordered_items = list(items)
+
+        ordered_items.sort(
+            key=lambda skill: (
+                0
+                if skill.lower()
+                in priority_lookup
+                else 1
+            )
+        )
 
         label = labels.get(
             category,
@@ -785,9 +1589,15 @@ def add_technical_skills(
         add_label_value(
             document,
             label + ": ",
-            " • ".join(items)
+            " • ".join(
+                ordered_items
+            )
         )
 
+
+# ============================================================
+# CERTIFICATIONS
+# ============================================================
 
 def add_certifications(
     document,
@@ -803,7 +1613,7 @@ def add_certifications(
     if not certifications:
         return
 
-    add_heading(
+    add_section_heading(
         document,
         "Certifications"
     )
@@ -813,64 +1623,78 @@ def add_certifications(
         " • ".join(
             certifications
         ),
-        size=9.5
+        size=BODY_SIZE,
+        after=6
     )
 
+
+# ============================================================
+# ADDITIONAL INFORMATION
+# ============================================================
 
 def add_additional_information(
     document,
     resume
 ):
-    """Add additional information."""
+    """Add verified additional information."""
 
     information = resume.get(
         "additional_information",
         {}
     )
 
-    add_heading(
-        document,
-        "Additional Information"
-    )
-
-    work_rights = resume.get(
+    personal = resume.get(
         "personal",
         {}
-    ).get(
+    )
+
+    items = []
+
+    work_rights = personal.get(
         "work_rights",
         ""
     )
 
     if work_rights:
-        add_bullet(
-            document,
+
+        items.append(
             work_rights
         )
 
-    driving = information.get(
+    driving_license = information.get(
         "driving_license",
         ""
     )
 
-    if driving:
-        add_bullet(
-            document,
-            driving
+    if driving_license:
+
+        items.append(
+            driving_license
         )
 
-    location = resume.get(
-        "personal",
-        {}
-    ).get(
-        "location",
+    availability = information.get(
+        "availability",
         ""
     )
 
-    if location:
-        add_bullet(
-            document,
-            "Based in "
-            + location
+    if availability:
+
+        items.append(
+            availability
+        )
+
+    preferred_work_modes = information.get(
+        "preferred_work_modes",
+        []
+    )
+
+    if preferred_work_modes:
+
+        items.append(
+            "Preferred work modes: "
+            + ", ".join(
+                preferred_work_modes
+            )
         )
 
     interests = information.get(
@@ -879,24 +1703,45 @@ def add_additional_information(
     )
 
     if interests:
+
+        items.append(
+            "Professional interests: "
+            + ", ".join(
+                interests
+            )
+        )
+
+    if not items:
+        return
+
+    add_section_heading(
+        document,
+        "Additional Information"
+    )
+
+    for item in items:
+
         add_bullet(
             document,
-            "Strong interest in "
-            + ", ".join(interests)
+            item
         )
 
 
-def add_safety_footer(
-    document,
+# ============================================================
+# SAFETY
+# ============================================================
+
+def get_safety(
     tailoring
 ):
-    """Add internal safety information only."""
+    """Return internal safety controls."""
 
     safety = {
         "invented_experience": False,
         "invented_skills": False,
         "invented_education": False,
         "invented_employment": False,
+        "personal_data_exposed": False,
         "automatic_submission": False,
         "human_review_required": True
     }
@@ -909,24 +1754,33 @@ def add_safety_footer(
     for key in safety:
 
         if key in plan_safety:
-            safety[key] = plan_safety[key]
+
+            safety[key] = (
+                plan_safety[key]
+            )
 
     return safety
 
+
+# ============================================================
+# RESUME GENERATION
+# ============================================================
 
 def generate_resume(
     resume,
     tailoring
 ):
-    """Generate ATS-friendly resume."""
+    """Generate complete ATS-friendly resume."""
 
     document = setup_document()
 
+    # Header
     add_personal_header(
         document,
         resume
     )
 
+    # Main sections
     add_professional_summary(
         document,
         resume,
@@ -935,7 +1789,8 @@ def generate_resume(
 
     add_core_skills(
         document,
-        resume
+        resume,
+        tailoring
     )
 
     add_experience(
@@ -956,7 +1811,8 @@ def generate_resume(
 
     add_technical_skills(
         document,
-        resume
+        resume,
+        tailoring
     )
 
     add_certifications(
@@ -972,33 +1828,52 @@ def generate_resume(
     return document
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
 
     print()
     print(
-        "ATS RESUME GENERATOR TEST - VERSION 5"
+        "ATS RESUME GENERATOR - VERSION 8"
     )
-    print("=" * 60)
+
+    print("=" * 68)
+
+    # --------------------------------------------------------
+    # Validate files
+    # --------------------------------------------------------
 
     if not PRIVATE_RESUME.exists():
 
+        print()
         print(
             "ERROR: Resume profile not found:"
         )
 
-        print(PRIVATE_RESUME)
+        print(
+            PRIVATE_RESUME
+        )
 
         return
 
     if not TAILORING_PLAN.exists():
 
+        print()
         print(
             "ERROR: Tailoring plan not found:"
         )
 
-        print(TAILORING_PLAN)
+        print(
+            TAILORING_PLAN
+        )
 
         return
+
+    # --------------------------------------------------------
+    # Load data
+    # --------------------------------------------------------
 
     resume = load_json(
         PRIVATE_RESUME
@@ -1013,11 +1888,16 @@ def main():
         {}
     )
 
+    # --------------------------------------------------------
+    # Display information
+    # --------------------------------------------------------
+
     print()
     print(
         "ATS RESUME GENERATOR"
     )
-    print("=" * 60)
+
+    print("=" * 68)
 
     print()
     print(
@@ -1035,6 +1915,10 @@ def main():
         f"{job.get('location', '')}"
     )
 
+    # --------------------------------------------------------
+    # ATS format
+    # --------------------------------------------------------
+
     print()
     print(
         "ATS FORMAT:"
@@ -1042,6 +1926,38 @@ def main():
 
     print(
         "  Single-column layout"
+    )
+
+    print(
+        "  Arial font"
+    )
+
+    print(
+        "  Professional navy headings"
+    )
+
+    print(
+        "  Blue underlined hyperlinks"
+    )
+
+    print(
+        "  Section divider above each section"
+    )
+
+    print(
+        "  Designation and location on same line"
+    )
+
+    print(
+        "  Justified professional paragraphs"
+    )
+
+    print(
+        "  Increased line spacing"
+    )
+
+    print(
+        "  Increased subheading spacing"
     )
 
     print(
@@ -1068,8 +1984,11 @@ def main():
         "  Standard Word document"
     )
 
-    safety = add_safety_footer(
-        None,
+    # --------------------------------------------------------
+    # Safety
+    # --------------------------------------------------------
+
+    safety = get_safety(
         tailoring
     )
 
@@ -1108,10 +2027,18 @@ def main():
         f"{safety['human_review_required']}"
     )
 
+    # --------------------------------------------------------
+    # Generate
+    # --------------------------------------------------------
+
     document = generate_resume(
         resume,
         tailoring
     )
+
+    # --------------------------------------------------------
+    # Output directory
+    # --------------------------------------------------------
 
     job_id = job.get(
         "job_id",
@@ -1134,16 +2061,49 @@ def main():
         / "resume.docx"
     )
 
-    document.save(
-        output_file
-    )
+    # --------------------------------------------------------
+    # Save
+    # --------------------------------------------------------
+
+    try:
+
+        document.save(
+            output_file
+        )
+
+    except PermissionError:
+
+        print()
+        print(
+            "ERROR: Word has the previous resume "
+            "file open."
+        )
+
+        print()
+        print(
+            "Close resume.docx in Microsoft Word "
+            "and run the command again."
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # Complete
+    # --------------------------------------------------------
 
     print()
     print(
         "Resume saved:"
     )
 
-    print(output_file)
+    print(
+        output_file
+    )
+
+    print()
+    print(
+        "VERSION 8 COMPLETE"
+    )
 
 
 if __name__ == "__main__":
