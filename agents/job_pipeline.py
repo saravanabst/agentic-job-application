@@ -1,4 +1,4 @@
-import json
+﻿import json
 from pathlib import Path
 from datetime import datetime
 
@@ -13,9 +13,7 @@ from duplicate_detector import find_duplicates
 from application_tracker import (
     initialize_database,
     application_exists,
-    add_application,
-    get_application,
-    get_deadline_status
+    add_application
 )
 
 
@@ -26,37 +24,66 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # DEADLINE HELPERS
 # ============================================================
 
-def normalize_deadline_status(
-    deadline_status,
-    application_deadline
-):
+DEADLINE_FORMATS = [
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%d"
+]
+
+
+def parse_deadline(deadline):
     """
-    Normalize deadline status.
+    Convert an application deadline into a datetime.
 
-    If no deadline was supplied, the correct status is
-    NO_DEADLINE rather than INVALID_DEADLINE.
+    Supported formats:
+
+        YYYY-MM-DD HH:MM:SS
+        YYYY-MM-DD HH:MM
+        YYYY-MM-DD
+
+    Returns:
+        datetime object when valid
+        None when empty or invalid
     """
 
-    if not application_deadline:
-        return "NO_DEADLINE"
+    if deadline is None:
+        return None
 
-    if not deadline_status:
-        return "NO_DEADLINE"
+    deadline_text = str(
+        deadline
+    ).strip()
 
-    return deadline_status
+    if not deadline_text:
+        return None
+
+    for deadline_format in DEADLINE_FORMATS:
+
+        try:
+
+            return datetime.strptime(
+                deadline_text,
+                deadline_format
+            )
+
+        except ValueError:
+
+            continue
+
+    return None
 
 
 def get_deadline_information(job):
     """
-    Return deadline information for a job.
+    Determine the application deadline status directly
+    from the discovered job record.
 
-    Returns:
+    Possible statuses:
 
-        {
-            "deadline": value,
-            "status": status,
-            "days_remaining": value
-        }
+        NO_DEADLINE
+        ACTIVE
+        URGENT
+        EXPIRED
+        INVALID_DEADLINE
     """
 
     application_deadline = get_application_deadline(
@@ -64,7 +91,7 @@ def get_deadline_information(job):
     )
 
     # --------------------------------------------------------
-    # No deadline
+    # NO DEADLINE
     # --------------------------------------------------------
 
     if not application_deadline:
@@ -76,77 +103,64 @@ def get_deadline_information(job):
         }
 
     # --------------------------------------------------------
-    # Ask tracker for the current status
+    # PARSE DEADLINE
     # --------------------------------------------------------
 
-    job_id = job.get(
-        "job_id"
-    )
-
-    try:
-
-        deadline_status = get_deadline_status(
-            job_id
-        )
-
-    except Exception:
-
-        deadline_status = None
-
-    deadline_status = normalize_deadline_status(
-        deadline_status,
+    deadline_datetime = parse_deadline(
         application_deadline
     )
 
+    if deadline_datetime is None:
+
+        return {
+            "deadline": application_deadline,
+            "status": "INVALID_DEADLINE",
+            "days_remaining": None
+        }
+
     # --------------------------------------------------------
-    # Calculate days remaining
+    # CALCULATE TIME REMAINING
     # --------------------------------------------------------
 
-    deadline_datetime = None
+    now = datetime.now()
 
-    deadline_formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%Y-%m-%d"
-    ]
+    difference = (
+        deadline_datetime - now
+    )
 
-    for deadline_format in deadline_formats:
+    days_remaining = difference.days
 
-        try:
+    # --------------------------------------------------------
+    # EXPIRED
+    # --------------------------------------------------------
 
-            deadline_datetime = datetime.strptime(
-                str(application_deadline),
-                deadline_format
-            )
+    if difference.total_seconds() < 0:
 
-            break
+        return {
+            "deadline": application_deadline,
+            "status": "EXPIRED",
+            "days_remaining": days_remaining
+        }
 
-        except ValueError:
+    # --------------------------------------------------------
+    # URGENT
+    # --------------------------------------------------------
 
-            continue
+    if difference.total_seconds() <= 48 * 60 * 60:
 
-    days_remaining = None
+        return {
+            "deadline": application_deadline,
+            "status": "URGENT",
+            "days_remaining": days_remaining
+        }
 
-    if deadline_datetime:
-
-        difference = (
-            deadline_datetime - datetime.now()
-        )
-
-        days_remaining = difference.days
-
-        # ----------------------------------------------------
-        # If the date is actually in the past but tracker
-        # returned another status, enforce EXPIRED here.
-        # ----------------------------------------------------
-
-        if difference.total_seconds() < 0:
-
-            deadline_status = "EXPIRED"
+    # --------------------------------------------------------
+    # ACTIVE
+    # --------------------------------------------------------
 
     return {
         "deadline": application_deadline,
-        "status": deadline_status,
+        "status": "ACTIVE",
         "days_remaining": days_remaining
     }
 
@@ -204,39 +218,25 @@ def print_deadline_information(
         )
 
     # --------------------------------------------------------
-    # Human-readable priority warning
+    # HUMAN-READABLE ACTION
     # --------------------------------------------------------
 
     if status == "EXPIRED":
 
         print(
-            "  ACTION: SKIP - APPLICATION DEADLINE EXPIRED"
+            "  ACTION: SKIP EXPIRED JOB"
         )
 
     elif status == "URGENT":
 
         print(
-            "  ACTION: URGENT - DEADLINE IS VERY CLOSE"
+            "  ACTION: URGENT DEADLINE"
         )
 
-    elif (
-        days_remaining is not None
-        and days_remaining <= 1
-        and days_remaining >= 0
-    ):
+    elif status == "ACTIVE":
 
         print(
-            "  ACTION: URGENT - DEADLINE IS WITHIN 24 HOURS"
-        )
-
-    elif (
-        days_remaining is not None
-        and days_remaining <= 3
-        and days_remaining >= 0
-    ):
-
-        print(
-            "  ACTION: HIGH PRIORITY - DEADLINE IS WITHIN 3 DAYS"
+            "  ACTION: CONTINUE PROCESSING"
         )
 
     elif status == "NO_DEADLINE":
@@ -245,18 +245,24 @@ def print_deadline_information(
             "  WARNING: No application deadline was provided."
         )
 
+    elif status == "INVALID_DEADLINE":
+
+        print(
+            "  WARNING: Application deadline format is invalid."
+        )
+
 
 def deadline_allows_processing(
     deadline_info
 ):
     """
-    Determine whether the job can continue through
-    the application pipeline.
+    Determine whether a job can continue.
 
     Expired jobs are stopped.
 
-    Jobs without a deadline are allowed to continue,
-    but remain flagged as NO_DEADLINE.
+    Jobs with no deadline, urgent deadlines,
+    active deadlines, and invalid deadlines
+    are allowed to continue.
     """
 
     status = deadline_info.get(
@@ -306,7 +312,7 @@ def process_job(job):
     )
 
     # ========================================================
-    # STEP A — DEADLINE CHECK
+    # STEP A - DEADLINE CHECK
     # ========================================================
 
     deadline_info = get_deadline_information(
@@ -317,10 +323,6 @@ def process_job(job):
         job,
         deadline_info
     )
-
-    # --------------------------------------------------------
-    # Stop immediately if deadline has expired.
-    # --------------------------------------------------------
 
     if not deadline_allows_processing(
         deadline_info
@@ -335,7 +337,7 @@ def process_job(job):
         return "deadline_expired"
 
     # ========================================================
-    # STEP B — DUPLICATE CHECK
+    # STEP B - DUPLICATE CHECK
     # ========================================================
 
     existing = application_exists(
@@ -358,7 +360,7 @@ def process_job(job):
         return "already_tracked"
 
     # ========================================================
-    # STEP C — MATCH SCORE
+    # STEP C - MATCH SCORE
     # ========================================================
 
     match_score = job.get(
@@ -370,7 +372,7 @@ def process_job(job):
         match_score = 0
 
     # ========================================================
-    # STEP D — DECISION
+    # STEP D - DECISION
     # ========================================================
 
     decision = job.get(
@@ -382,7 +384,7 @@ def process_job(job):
         decision = "REVIEW"
 
     # ========================================================
-    # STEP E — CREATE APPLICATION RECORD
+    # STEP E - CREATE APPLICATION RECORD
     # ========================================================
 
     application_record = {
@@ -451,7 +453,7 @@ def process_job(job):
     }
 
     # ========================================================
-    # STEP F — ADD TO TRACKER
+    # STEP F - ADD TO TRACKER
     # ========================================================
 
     created = add_application(
@@ -478,16 +480,16 @@ def process_deadline_monitoring(
     This does NOT approve, submit, email, or apply.
     """
 
-    print()
-
-    print(
-        "STEP 6: Deadline monitoring..."
-    )
-
     if not jobs:
 
         print(
             "No jobs available for deadline monitoring."
+        )
+
+        print()
+
+        print(
+            "Deadline monitoring is informational only."
         )
 
         return
@@ -552,7 +554,7 @@ def main():
     print()
 
     print(
-        "AGENTIC JOB APPLICATION PIPELINE - VERSION 6"
+        "AGENTIC JOB APPLICATION PIPELINE - VERSION 7"
     )
 
     print(
@@ -560,7 +562,7 @@ def main():
     )
 
     # ========================================================
-    # STEP 1 — DATABASE
+    # STEP 1 - DATABASE
     # ========================================================
 
     print()
@@ -576,7 +578,7 @@ def main():
     )
 
     # ========================================================
-    # STEP 2 — LOAD JOBS
+    # STEP 2 - LOAD JOBS
     # ========================================================
 
     print()
@@ -600,7 +602,7 @@ def main():
         return
 
     # ========================================================
-    # STEP 3 — VALIDATE JOBS
+    # STEP 3 - VALIDATE JOBS
     # ========================================================
 
     print()
@@ -643,7 +645,7 @@ def main():
     )
 
     # ========================================================
-    # STEP 4 — EARLY DEADLINE SCREENING
+    # STEP 4 - EARLY DEADLINE SCREENING
     # ========================================================
 
     print()
@@ -655,7 +657,9 @@ def main():
     deadline_results = {
         "no_deadline": 0,
         "active": 0,
-        "expired": 0
+        "urgent": 0,
+        "expired": 0,
+        "invalid": 0
     }
 
     deadline_valid_jobs = []
@@ -693,10 +697,22 @@ def main():
                 "no_deadline"
             ] += 1
 
-        else:
+        elif status == "ACTIVE":
 
             deadline_results[
                 "active"
+            ] += 1
+
+        elif status == "URGENT":
+
+            deadline_results[
+                "urgent"
+            ] += 1
+
+        elif status == "INVALID_DEADLINE":
+
+            deadline_results[
+                "invalid"
             ] += 1
 
         deadline_valid_jobs.append(
@@ -720,8 +736,18 @@ def main():
     )
 
     print(
+        f"  Urgent deadline: "
+        f"{deadline_results['urgent']}"
+    )
+
+    print(
         f"  Expired: "
         f"{deadline_results['expired']}"
+    )
+
+    print(
+        f"  Invalid deadline: "
+        f"{deadline_results['invalid']}"
     )
 
     print(
@@ -729,8 +755,73 @@ def main():
         f"{len(deadline_valid_jobs)}"
     )
 
+    if not deadline_valid_jobs:
+
+        print()
+
+        print(
+            "No jobs remain after deadline screening."
+        )
+
+        print()
+
+        print(
+            "=" * 70
+        )
+
+        print(
+            "PIPELINE COMPLETE"
+        )
+
+        print(
+            "=" * 70
+        )
+
+        print(
+            f"Jobs loaded:        "
+            f"{len(jobs)}"
+        )
+
+        print(
+            f"Valid jobs:         "
+            f"{len(valid_jobs)}"
+        )
+
+        print(
+            f"Expired jobs:       "
+            f"{deadline_results['expired']}"
+        )
+
+        print()
+
+        print(
+            "SAFETY STATUS"
+        )
+
+        print(
+            "Automatic submission: False"
+        )
+
+        print(
+            "Automatic application: False"
+        )
+
+        print(
+            "Automatic email: False"
+        )
+
+        print(
+            "Automatic job submission: False"
+        )
+
+        print(
+            "Deadline monitoring is informational only."
+        )
+
+        return
+
     # ========================================================
-    # STEP 5 — DUPLICATE DETECTION
+    # STEP 5 - DUPLICATE DETECTION
     # ========================================================
 
     print()
@@ -763,7 +854,7 @@ def main():
         )
 
     # ========================================================
-    # STEP 6 — APPLICATION TRACKING
+    # STEP 6 - APPLICATION TRACKING
     # ========================================================
 
     print()
@@ -776,9 +867,10 @@ def main():
         "tracked": 0,
         "already_tracked": 0,
         "duplicates": 0,
-        "deadline_expired": deadline_results[
-            "expired"
-        ]
+        "deadline_expired":
+            deadline_results[
+                "expired"
+            ]
     }
 
     for job in deadline_valid_jobs:
@@ -813,7 +905,7 @@ def main():
             ] += 1
 
     # ========================================================
-    # STEP 7 — INFORMATIONAL DEADLINE MONITORING
+    # STEP 7 - INFORMATIONAL DEADLINE MONITORING
     # ========================================================
 
     print()
