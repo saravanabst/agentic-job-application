@@ -1,0 +1,101 @@
+{
+    "version": "1.0",
+    "purpose": "Rules for tailoring resumes to individual job descriptions",
+
+    "principles": {
+        "never_invent_experience": true,
+        "never_invent_skills": true,
+        "never_invent_education": true,
+        "never_invent_employment": true,
+        "use_only_candidate_evidence": true,
+        "human_review_required": true
+    },
+
+    "tailoring_strategy": {
+        "prioritize_required_skills": true,
+        "prioritize_matched_skills": true,
+        "prioritize_high_priority_skills": true,
+        "include_relevant_portfolio_projects": true,
+        "deprioritize_unrelated_skills": true,
+        "preserve_truthful_candidate_information": true
+    },
+
+    "section_rules": {
+        "professional_summary": {
+            "enabled": true,
+            "maximum_sentences": 3,
+            "emphasize_target_role": true,
+            "emphasize_top_matched_skills": true,
+            "emphasize_relevant_project_evidence": true
+        },
+
+        "technical_skills": {
+            "enabled": true,
+            "show_matched_required_skills_first": true,
+            "show_matched_preferred_skills_second": true,
+            "show_other_relevant_skills_last": true,
+            "exclude_unrelated_skills": false
+        },
+
+        "portfolio_projects": {
+            "enabled": true,
+            "rank_by_job_relevance": true,
+            "include_only_supported_evidence": true,
+            "maximum_projects": 3
+        },
+
+        "experience": {
+            "enabled": true,
+            "prioritize_relevant_experience": true,
+            "never_modify_employer_names": true,
+            "never_modify_job_titles": true,
+            "never_fabricate_responsibilities": true
+        },
+
+        "education": {
+            "enabled": true,
+            "preserve_candidate_information": true
+        }
+    },
+
+    "project_priority": {
+        "Farmers Market Analytics": {
+            "default_priority": 1,
+            "strong_for": [
+                "SQL",
+                "Python",
+                "Pandas",
+                "Excel",
+                "Tableau",
+                "Reporting",
+                "Dashboarding",
+                "Data Cleaning",
+                "Data Validation",
+                "Automation",
+                "Business Intelligence"
+            ]
+        },
+
+        "Insurance Premium Prediction": {
+            "default_priority": 2,
+            "strong_for": [
+                "Python",
+                "Pandas",
+                "NumPy",
+                "Machine Learning",
+                "Scikit-learn",
+                "Regression",
+                "Feature Engineering",
+                "Model Evaluation",
+                "Predictive Analytics",
+                "Exploratory Data Analysis"
+            ]
+        }
+    },
+
+    "output": {
+        "format": "json",
+        "save_to_private_directory": true,
+        "human_review_before_use": true
+    }
+}
