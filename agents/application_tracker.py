@@ -1,14 +1,37 @@
+
+import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 
 
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DATABASE_DIR = BASE_DIR / "applications" / "data"
+DATABASE_DIR = (
+    BASE_DIR
+    / "applications"
+    / "data"
+)
 
-DATABASE_PATH = DATABASE_DIR / "applications.db"
+DATABASE_PATH = (
+    DATABASE_DIR
+    / "applications.db"
+)
 
+RAW_JOBS_DIR = (
+    BASE_DIR
+    / "jobs"
+    / "raw"
+)
+
+
+# ============================================================
+# APPLICATION STATUSES
+# ============================================================
 
 VALID_STATUSES = [
     "not_applied",
@@ -23,19 +46,38 @@ VALID_STATUSES = [
 ]
 
 
+# ============================================================
+# DEADLINE STATUSES
+# ============================================================
+
 DEADLINE_STATUSES = [
     "NO_DEADLINE",
     "INVALID_DEADLINE",
-    "OVERDUE",
-    "DUE_TODAY",
-    "DUE_SOON",
-    "UPCOMING"
+    "EXPIRED",
+    "URGENT",
+    "ACTIVE"
 ]
 
 
+# ============================================================
+# SAFETY CONFIGURATION
+# ============================================================
+
+AUTOMATIC_SUBMISSION = False
+AUTOMATIC_APPLICATION = False
+AUTOMATIC_EMAIL = False
+AUTOMATIC_JOB_SUBMISSION = False
+AUTOMATIC_APPROVAL = False
+HUMAN_REVIEW_REQUIRED = True
+
+
+# ============================================================
+# DATABASE CONNECTION
+# ============================================================
+
 def get_connection():
     """
-    Create a database connection.
+    Create a SQLite database connection.
     """
 
     DATABASE_DIR.mkdir(
@@ -43,18 +85,23 @@ def get_connection():
         exist_ok=True
     )
 
-    return sqlite3.connect(
+    connection = sqlite3.connect(
         DATABASE_PATH
     )
 
+    return connection
+
+
+# ============================================================
+# DATABASE INITIALIZATION
+# ============================================================
 
 def initialize_database():
     """
-    Create or upgrade the application tracking table.
+    Create the application tracker database.
 
-    The deadline fields are deliberately stored in the
-    application tracker so deadline information follows
-    the job throughout the application lifecycle.
+    Existing databases are migrated safely by adding
+    missing columns when required.
     """
 
     connection = get_connection()
@@ -67,7 +114,7 @@ def initialize_database():
 
             id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-            job_id TEXT NOT NULL,
+            job_id TEXT NOT NULL UNIQUE,
 
             company TEXT NOT NULL,
 
@@ -113,28 +160,17 @@ def initialize_database():
 
             human_approved INTEGER DEFAULT 0,
 
-            reviewer TEXT,
+            reviewer TEXT
 
-            UNIQUE(job_id)
         )
         """
     )
 
     connection.commit()
 
-    # --------------------------------------------------
-    # DATABASE MIGRATION
-    # --------------------------------------------------
-    #
-    # Existing applications.db databases may have been
-    # created by an earlier version of the tracker.
-    #
-    # SQLite does not support adding the new columns
-    # through CREATE TABLE IF NOT EXISTS.
-    #
-    # Therefore we inspect the existing table and add
-    # missing columns when necessary.
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    # MIGRATION
+    # --------------------------------------------------------
 
     cursor.execute(
         """
@@ -147,15 +183,60 @@ def initialize_database():
         for row in cursor.fetchall()
     }
 
-    new_columns = {
+    required_columns = {
+
+        "company": "TEXT",
+
+        "job_title": "TEXT",
+
+        "location": "TEXT",
+
+        "work_mode": "TEXT",
+
+        "source": "TEXT",
+
+        "source_job_id": "TEXT",
+
+        "job_url": "TEXT",
+
+        "match_score": "REAL",
+
+        "decision": "TEXT",
+
+        "application_status": (
+            "TEXT DEFAULT 'not_applied'"
+        ),
+
+        "discovered_at": "TEXT",
+
+        "approved_at": "TEXT",
+
+        "submitted_at": "TEXT",
+
+        "last_updated": "TEXT",
+
+        "resume_version": "TEXT",
+
+        "cover_letter_version": "TEXT",
+
+        "application_method": "TEXT",
+
+        "notes": "TEXT",
+
         "application_deadline": "TEXT",
+
         "deadline_status": "TEXT",
+
         "days_remaining": "INTEGER",
-        "human_approved": "INTEGER DEFAULT 0",
+
+        "human_approved": (
+            "INTEGER DEFAULT 0"
+        ),
+
         "reviewer": "TEXT"
     }
 
-    for column_name, column_definition in new_columns.items():
+    for column_name, column_type in required_columns.items():
 
         if column_name not in existing_columns:
 
@@ -163,7 +244,7 @@ def initialize_database():
                 f"""
                 ALTER TABLE applications
                 ADD COLUMN {column_name}
-                {column_definition}
+                {column_type}
                 """
             )
 
@@ -172,18 +253,33 @@ def initialize_database():
     connection.close()
 
 
+# ============================================================
+# TIME
+# ============================================================
+
+def current_timestamp():
+    """
+    Return current local timestamp.
+    """
+
+    return datetime.now().isoformat(
+        timespec="seconds"
+    )
+
+
+# ============================================================
+# DEADLINE PARSING
+# ============================================================
+
 def parse_deadline(deadline):
     """
-    Convert a deadline string into a datetime object.
+    Convert a deadline string to datetime.
 
     Supported formats:
-
-        2026-08-30
-        2026-08-30 17:00
-        2026-08-30T17:00
-        2026-08-30T17:00:00
-
-    Returns None when no valid deadline is available.
+        YYYY-MM-DD HH:MM
+        YYYY-MM-DD HH:MM:SS
+        YYYY-MM-DD
+        ISO datetime
     """
 
     if deadline is None:
@@ -207,32 +303,48 @@ def parse_deadline(deadline):
         return None
 
     formats = [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M",
-        "%Y-%m-%d %H:%M:%S",
+
         "%Y-%m-%d %H:%M",
-        "%Y-%m-%d"
+
+        "%Y-%m-%d %H:%M:%S",
+
+        "%Y-%m-%d",
+
     ]
 
-    for date_format in formats:
+    for fmt in formats:
 
         try:
 
             return datetime.strptime(
                 deadline,
-                date_format
+                fmt
             )
 
         except ValueError:
 
             continue
 
-    return None
+    try:
 
+        return datetime.fromisoformat(
+            deadline
+        )
+
+    except ValueError:
+
+        return None
+
+
+# ============================================================
+# DEADLINE FORMATTING
+# ============================================================
 
 def format_deadline(deadline):
     """
-    Return a consistent human-readable deadline.
+    Normalize deadline to:
+
+        YYYY-MM-DD HH:MM
     """
 
     parsed = parse_deadline(
@@ -247,24 +359,21 @@ def format_deadline(deadline):
     )
 
 
+# ============================================================
+# DEADLINE CALCULATION
+# ============================================================
+
 def calculate_deadline_status(deadline):
     """
-    Calculate the current deadline status.
+    Calculate deadline status using the actual current date.
 
     Returns:
 
-        NO_DEADLINE
-        INVALID_DEADLINE
-        OVERDUE
-        DUE_TODAY
-        DUE_SOON
-        UPCOMING
-
-    Deadline monitoring only produces information and
-    warnings. It never submits an application.
+        status
+        days_remaining
     """
 
-    if deadline is None:
+    if not deadline:
 
         return (
             "NO_DEADLINE",
@@ -284,35 +393,57 @@ def calculate_deadline_status(deadline):
 
     now = datetime.now()
 
-    difference = parsed - now
+    difference = (
+        parsed - now
+    )
 
-    total_seconds = difference.total_seconds()
+    total_seconds = (
+        difference.total_seconds()
+    )
 
-    days_remaining = difference.days
+    days_remaining = (
+        difference.days
+    )
+
+    # --------------------------------------------------------
+    # EXPIRED
+    # --------------------------------------------------------
 
     if total_seconds < 0:
 
         return (
-            "OVERDUE",
+            "EXPIRED",
             days_remaining
         )
+
+    # --------------------------------------------------------
+    # DUE TODAY
+    # --------------------------------------------------------
 
     if parsed.date() == now.date():
 
         return (
-            "DUE_TODAY",
+            "URGENT",
             0
         )
+
+    # --------------------------------------------------------
+    # DUE SOON
+    # --------------------------------------------------------
 
     if days_remaining <= 3:
 
         return (
-            "DUE_SOON",
+            "URGENT",
             days_remaining
         )
 
+    # --------------------------------------------------------
+    # UPCOMING
+    # --------------------------------------------------------
+
     return (
-        "UPCOMING",
+        "ACTIVE",
         days_remaining
     )
 
@@ -331,7 +462,7 @@ def get_deadline_status(deadline):
 
 def get_deadline_information(deadline):
     """
-    Return both deadline status and days remaining.
+    Return deadline status and days remaining.
     """
 
     return calculate_deadline_status(
@@ -339,9 +470,69 @@ def get_deadline_information(deadline):
     )
 
 
+# ============================================================
+# JOB FILE LOADING
+# ============================================================
+
+def get_job_file(job_id):
+    """
+    Return the raw job JSON path.
+    """
+
+    return (
+        RAW_JOBS_DIR
+        / f"{job_id}.json"
+    )
+
+
+def load_job_from_raw(job_id):
+    """
+    Load the latest raw job record.
+
+    Returns:
+        dict
+        or None
+    """
+
+    job_file = get_job_file(
+        job_id
+    )
+
+    if not job_file.exists():
+
+        return None
+
+    try:
+
+        with open(
+            job_file,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            return json.load(
+                file
+            )
+
+    except (
+        json.JSONDecodeError,
+        OSError
+    ):
+
+        return None
+
+
+# ============================================================
+# APPLICATION EXISTENCE
+# ============================================================
+
 def application_exists(job_id):
     """
     Check whether a job already exists.
+
+    Returns:
+        tuple
+        or None
     """
 
     connection = get_connection()
@@ -368,26 +559,36 @@ def application_exists(job_id):
     return result
 
 
+# ============================================================
+# ADD APPLICATION
+# ============================================================
+
 def add_application(job):
     """
     Add a job to the application tracker.
 
-    Deadline information is copied from the job record.
-
-    No deadline is invented.
-
-    Duplicate job IDs are not inserted twice.
+    Duplicate job IDs are never inserted twice.
     """
 
+    job_id = job.get(
+        "job_id"
+    )
+
+    if not job_id:
+
+        raise ValueError(
+            "Job must contain job_id."
+        )
+
     existing = application_exists(
-        job["job_id"]
+        job_id
     )
 
     if existing:
 
         print(
             f"APPLICATION ALREADY EXISTS: "
-            f"{job['job_id']}"
+            f"{job_id}"
         )
 
         print(
@@ -397,23 +598,51 @@ def add_application(job):
 
         return False
 
-    now = datetime.now().isoformat(
-        timespec="seconds"
+    now = current_timestamp()
+
+    application_deadline = (
+        job.get(
+            "application_deadline"
+        )
     )
 
-    application_deadline = job.get(
-        "application_deadline"
-    )
-
-    deadline_status, days_remaining = (
-        calculate_deadline_status(
+    formatted_deadline = (
+        format_deadline(
             application_deadline
         )
     )
 
-    formatted_deadline = format_deadline(
-        application_deadline
-    )
+    # --------------------------------------------------------
+    # DEADLINE CLASSIFICATION
+    #
+    # Distinguish between:
+    #
+    #   No deadline supplied
+    #       -> NO_DEADLINE
+    #
+    #   Deadline supplied but invalid
+    #       -> INVALID_DEADLINE
+    #
+    #   Valid deadline
+    #       -> calculate normal deadline status
+    # --------------------------------------------------------
+
+    if (
+        application_deadline is not None
+        and str(application_deadline).strip()
+        and formatted_deadline is None
+    ):
+
+        deadline_status = "INVALID_DEADLINE"
+        days_remaining = None
+
+    else:
+
+        deadline_status, days_remaining = (
+            calculate_deadline_status(
+                formatted_deadline
+            )
+        )
 
     connection = get_connection()
 
@@ -424,42 +653,25 @@ def add_application(job):
         INSERT INTO applications (
 
             job_id,
-
             company,
-
             job_title,
-
             location,
-
             work_mode,
-
             source,
-
             source_job_id,
-
             job_url,
-
             match_score,
-
             decision,
-
             application_status,
-
             discovered_at,
-
             last_updated,
-
             notes,
-
             application_deadline,
-
             deadline_status,
-
             days_remaining,
-
             human_approved,
-
             reviewer
+
         )
 
         VALUES (
@@ -469,36 +681,44 @@ def add_application(job):
         """,
         (
 
+            job_id,
+
             job.get(
-                "job_id"
+                "company",
+                ""
             ),
 
             job.get(
-                "company"
+                "job_title",
+                job.get(
+                    "title",
+                    ""
+                )
             ),
 
             job.get(
-                "title"
+                "location",
+                ""
             ),
 
             job.get(
-                "location"
+                "work_mode",
+                ""
             ),
 
             job.get(
-                "work_mode"
+                "source",
+                ""
             ),
 
             job.get(
-                "source"
+                "source_job_id",
+                ""
             ),
 
             job.get(
-                "source_job_id"
-            ),
-
-            job.get(
-                "url"
+                "url",
+                ""
             ),
 
             job.get(
@@ -539,8 +759,7 @@ def add_application(job):
     connection.close()
 
     print(
-        f"APPLICATION CREATED: "
-        f"{job['job_id']}"
+        f"APPLICATION CREATED: {job_id}"
     )
 
     print(
@@ -563,59 +782,133 @@ def add_application(job):
     return True
 
 
+# ============================================================
+# STATUS TRANSITIONS
+# ============================================================
+
 def update_status(
     job_id,
     new_status
 ):
     """
-    Update the application status.
+    Update application status safely.
+
+    Important:
+    - approved requires human approval
+    - submitted requires human approval
+    - expired applications cannot be submitted
     """
 
     if new_status not in VALID_STATUSES:
 
         raise ValueError(
-            f"Invalid status: "
-            f"{new_status}"
+            f"Invalid status: {new_status}"
         )
 
-    existing = application_exists(
+    application = get_application(
         job_id
     )
 
-    if not existing:
+    if not application:
 
         print(
-            f"Job not found: "
-            f"{job_id}"
+            f"Job not found: {job_id}"
         )
 
         return False
 
-    now = datetime.now().isoformat(
-        timespec="seconds"
+    current_status = application[
+        "application_status"
+    ]
+
+    human_approved = bool(
+        application[
+            "human_approved"
+        ]
     )
 
-    connection = get_connection()
+    deadline_status = application[
+        "deadline_status"
+    ]
 
-    cursor = connection.cursor()
+    # --------------------------------------------------------
+    # APPROVAL SAFETY
+    # --------------------------------------------------------
+
+    if new_status == "approved":
+
+        if not human_approved:
+
+            print(
+                "STATUS UPDATE BLOCKED:"
+            )
+
+            print(
+                "Cannot mark application "
+                "approved without explicit "
+                "human approval."
+            )
+
+            return False
+
+    # --------------------------------------------------------
+    # SUBMISSION SAFETY
+    # --------------------------------------------------------
+
+    if new_status == "submitted":
+
+        if not human_approved:
+
+            print(
+                "SUBMISSION BLOCKED:"
+            )
+
+            print(
+                "Human approval is required."
+            )
+
+            return False
+
+        if deadline_status in (
+    	    "EXPIRED",
+    	    "INVALID_DEADLINE"
+	    ):
+
+            print(
+                "SUBMISSION BLOCKED:"
+            )
+
+            print(
+                f"Deadline status: "
+                f"{deadline_status}"
+            )
+
+            return False
+
+    now = current_timestamp()
 
     approved_at = None
+
+    submitted_at = None
 
     if new_status == "approved":
 
         approved_at = now
 
-    submitted_at = None
-
     if new_status == "submitted":
 
         submitted_at = now
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
 
     cursor.execute(
         """
         UPDATE applications
 
-        SET application_status = ?,
+        SET
+            application_status = ?,
 
             last_updated = ?,
 
@@ -636,6 +929,7 @@ def update_status(
         WHERE job_id = ?
         """,
         (
+
             new_status,
 
             now,
@@ -664,6 +958,10 @@ def update_status(
     return True
 
 
+# ============================================================
+# HUMAN APPROVAL
+# ============================================================
+
 def set_human_approval(
     job_id,
     approved,
@@ -672,10 +970,15 @@ def set_human_approval(
     """
     Record explicit human approval.
 
-    Automatic approval is intentionally prohibited.
+    This function does NOT automatically approve anything.
 
-    approved must be supplied by a human-controlled
-    workflow.
+    The caller must explicitly provide:
+
+        approved=True
+
+    and ideally a reviewer name.
+
+    Automatic approval is never performed by the pipeline.
     """
 
     if not isinstance(
@@ -687,60 +990,98 @@ def set_human_approval(
             "Human approval must be True or False."
         )
 
-    existing = application_exists(
+    application = get_application(
         job_id
     )
 
-    if not existing:
+    if not application:
 
         print(
-            f"Job not found: "
-            f"{job_id}"
+            f"Job not found: {job_id}"
         )
 
         return False
 
-    now = datetime.now().isoformat(
-        timespec="seconds"
-    )
+    now = current_timestamp()
 
     connection = get_connection()
 
     cursor = connection.cursor()
 
-    cursor.execute(
-        """
-        UPDATE applications
+    if approved:
 
-        SET human_approved = ?,
+        if not reviewer:
 
-            reviewer = ?,
+            reviewer = "Human Reviewer"
 
-            approved_at =
-                CASE
-                    WHEN ? = 1
-                    THEN ?
-                    ELSE approved_at
-                END,
+        cursor.execute(
+            """
+            UPDATE applications
 
-            last_updated = ?
+            SET
+                human_approved = 1,
 
-        WHERE job_id = ?
-        """,
-        (
-            1 if approved else 0,
+                reviewer = ?,
 
-            reviewer,
+                approved_at = ?,
 
-            1 if approved else 0,
+                application_status =
+                    CASE
+                        WHEN application_status
+                        IN ('not_applied',
+                            'review_required',
+                            'application_prepared')
+                        THEN 'approved'
+                        ELSE application_status
+                    END,
 
-            now if approved else None,
+                last_updated = ?
 
-            now,
+            WHERE job_id = ?
+            """,
+            (
 
-            job_id
+                reviewer,
+
+                now,
+
+                now,
+
+                job_id
+            )
         )
-    )
+
+    else:
+
+        cursor.execute(
+            """
+            UPDATE applications
+
+            SET
+                human_approved = 0,
+
+                reviewer = NULL,
+
+                approved_at = NULL,
+
+                application_status =
+                    CASE
+                        WHEN application_status = 'approved'
+                        THEN 'review_required'
+                        ELSE application_status
+                    END,
+
+                last_updated = ?
+
+            WHERE job_id = ?
+            """,
+            (
+
+                now,
+
+                job_id
+            )
+        )
 
     connection.commit()
 
@@ -748,28 +1089,45 @@ def set_human_approval(
 
     print(
         f"HUMAN APPROVAL UPDATED: "
-        f"{job_id} -> "
-        f"{approved}"
+        f"{job_id} -> {approved}"
     )
 
-    if reviewer:
+    if approved:
 
         print(
-            f"Reviewer: "
-            f"{reviewer}"
+            f"Reviewer: {reviewer}"
+        )
+
+        print(
+            "Application status may now "
+            "be approved."
+        )
+
+    else:
+
+        print(
+            "Application returned to "
+            "human review."
         )
 
     return True
 
 
-def get_application(
-    job_id
-):
+# ============================================================
+# GET APPLICATION
+# ============================================================
+
+def get_application(job_id):
     """
-    Return one application.
+    Return one application as a dictionary.
+
+    Using a dictionary instead of numeric indexes prevents
+    the column-index bugs that occurred in previous versions.
     """
 
     connection = get_connection()
+
+    connection.row_factory = sqlite3.Row
 
     cursor = connection.cursor()
 
@@ -784,23 +1142,36 @@ def get_application(
         )
     )
 
-    result = cursor.fetchone()
+    row = cursor.fetchone()
 
     connection.close()
 
-    return result
+    if row is None:
 
+        return None
+
+    return dict(row)
+
+
+# ============================================================
+# REFRESH DEADLINE STATUS
+# ============================================================
 
 def refresh_deadline_status(
     job_id=None
 ):
     """
-    Refresh deadline status for one application
-    or all applications.
+    Refresh deadline information.
 
-    This function only updates tracking information.
+    If job_id is supplied:
+        refresh only that application.
 
-    It never submits an application.
+    If job_id is None:
+        refresh all applications.
+
+    The latest deadline is read from jobs/raw/*.json.
+
+    This function NEVER submits or approves an application.
     """
 
     connection = get_connection()
@@ -835,29 +1206,56 @@ def refresh_deadline_status(
 
     applications = cursor.fetchall()
 
-    now = datetime.now().isoformat(
-        timespec="seconds"
-    )
-
     updated = 0
 
     for application in applications:
 
         current_job_id = application[0]
 
-        deadline = application[1]
+        current_deadline = application[1]
+
+        # ----------------------------------------------------
+        # Read latest raw job
+        # ----------------------------------------------------
+
+        raw_job = load_job_from_raw(
+            current_job_id
+        )
+
+        if raw_job is not None:
+
+            raw_deadline = raw_job.get(
+                "application_deadline"
+            )
+
+            if raw_deadline is not None:
+
+                current_deadline = (
+                    format_deadline(
+                        raw_deadline
+                    )
+                )
+
+        # ----------------------------------------------------
+        # Calculate deadline
+        # ----------------------------------------------------
 
         status, days_remaining = (
             calculate_deadline_status(
-                deadline
+                current_deadline
             )
         )
+
+        now = current_timestamp()
 
         cursor.execute(
             """
             UPDATE applications
 
-            SET deadline_status = ?,
+            SET
+                application_deadline = ?,
+
+                deadline_status = ?,
 
                 days_remaining = ?,
 
@@ -866,6 +1264,9 @@ def refresh_deadline_status(
             WHERE job_id = ?
             """,
             (
+
+                current_deadline,
+
                 status,
 
                 days_remaining,
@@ -885,6 +1286,10 @@ def refresh_deadline_status(
     return updated
 
 
+# ============================================================
+# PRINT DEADLINE STATUS
+# ============================================================
+
 def print_deadline_status(
     job_id
 ):
@@ -892,32 +1297,12 @@ def print_deadline_status(
     Display deadline information for one application.
     """
 
-    connection = get_connection()
-
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        SELECT
-            job_id,
-            company,
-            job_title,
-            application_deadline,
-            deadline_status,
-            days_remaining
-        FROM applications
-        WHERE job_id = ?
-        """,
-        (
-            job_id,
-        )
+    application = get_application(
+        job_id
     )
 
-    application = cursor.fetchone()
-
-    connection.close()
-
     print()
+
     print(
         "APPLICATION DEADLINE MONITOR"
     )
@@ -929,35 +1314,37 @@ def print_deadline_status(
     if not application:
 
         print(
-            f"Application not found: "
-            f"{job_id}"
+            f"Application not found: {job_id}"
         )
 
         return
 
-    (
-        current_job_id,
-        company,
-        title,
-        deadline,
-        status,
-        days_remaining
-    ) = application
-
     print(
         f"Job:       "
-        f"{current_job_id}"
+        f"{application['job_id']}"
     )
 
     print(
         f"Company:   "
-        f"{company}"
+        f"{application['company']}"
     )
 
     print(
         f"Position:  "
-        f"{title}"
+        f"{application['job_title']}"
     )
+
+    deadline = application[
+        "application_deadline"
+    ]
+
+    status = application[
+        "deadline_status"
+    ]
+
+    days_remaining = application[
+        "days_remaining"
+    ]
 
     print(
         f"Deadline:  "
@@ -969,35 +1356,35 @@ def print_deadline_status(
         f"{status}"
     )
 
-    if status == "OVERDUE":
-
-        overdue_days = abs(
-            days_remaining or 0
-        )
-
-        print(
-            f"OVERDUE BY: "
-            f"{overdue_days} day(s)"
-        )
-
-    elif status == "DUE_TODAY":
-
-        print(
-            "DEADLINE IS TODAY"
-        )
-
-    elif status == "DUE_SOON":
+    if days_remaining is not None:
 
         print(
             f"Days remaining: "
             f"{days_remaining}"
         )
 
-    elif status == "UPCOMING":
+    if status == "EXPIRED":
 
         print(
-            f"Days remaining: "
-            f"{days_remaining}"
+            "WARNING: Application deadline has passed."
+        )
+
+    elif status == "URGENT":
+
+        print(
+            "WARNING: Application deadline is today."
+        )
+
+    elif status == "URGENT":
+
+        print(
+            "WARNING: Application deadline is within 3 days."
+        )
+
+    elif status == "ACTIVE":
+
+        print(
+            "Deadline is upcoming."
         )
 
     elif status == "NO_DEADLINE":
@@ -1009,58 +1396,53 @@ def print_deadline_status(
     elif status == "INVALID_DEADLINE":
 
         print(
-            "WARNING: Deadline value is invalid."
+            "WARNING: Deadline requires human review."
         )
 
 
+# ============================================================
+# LIST APPLICATIONS
+# ============================================================
+
 def list_applications():
     """
-    Display all tracked applications.
+    Return all applications as dictionaries.
     """
 
     connection = get_connection()
+
+    connection.row_factory = sqlite3.Row
 
     cursor = connection.cursor()
 
     cursor.execute(
         """
-        SELECT
-
-            job_id,
-
-            company,
-
-            job_title,
-
-            location,
-
-            match_score,
-
-            decision,
-
-            application_status,
-
-            application_deadline,
-
-            deadline_status,
-
-            days_remaining,
-
-            human_approved,
-
-            reviewer,
-
-            last_updated
-
+        SELECT *
         FROM applications
-
         ORDER BY last_updated DESC
         """
     )
 
-    applications = cursor.fetchall()
+    rows = cursor.fetchall()
 
     connection.close()
+
+    return [
+        dict(row)
+        for row in rows
+    ]
+
+
+# ============================================================
+# PRINT APPLICATION LIST
+# ============================================================
+
+def print_application_list():
+    """
+    Display all tracked applications.
+    """
+
+    applications = list_applications()
 
     print()
 
@@ -1075,115 +1457,88 @@ def list_applications():
     if not applications:
 
         print(
-            "No applications tracked yet."
+            "No applications tracked."
         )
 
         return
 
     for application in applications:
 
-        (
-            job_id,
-
-            company,
-
-            title,
-
-            location,
-
-            score,
-
-            decision,
-
-            status,
-
-            deadline,
-
-            deadline_status,
-
-            days_remaining,
-
-            human_approved,
-
-            reviewer,
-
-            updated
-
-        ) = application
-
         print()
 
         print(
             f"Job ID:          "
-            f"{job_id}"
+            f"{application['job_id']}"
         )
 
         print(
             f"Company:         "
-            f"{company}"
+            f"{application['company']}"
         )
 
         print(
             f"Title:           "
-            f"{title}"
+            f"{application['job_title']}"
         )
 
         print(
             f"Location:        "
-            f"{location}"
+            f"{application['location']}"
         )
 
         print(
             f"Score:           "
-            f"{score}"
+            f"{application['match_score']}"
         )
 
         print(
             f"Decision:        "
-            f"{decision}"
+            f"{application['decision']}"
         )
 
         print(
             f"Status:          "
-            f"{status}"
+            f"{application['application_status']}"
         )
 
         print(
             f"Deadline:        "
-            f"{deadline or 'NOT PROVIDED'}"
+            f"{application['application_deadline'] or 'NOT PROVIDED'}"
         )
 
         print(
             f"Deadline Status: "
-            f"{deadline_status}"
+            f"{application['deadline_status']}"
         )
 
-        if days_remaining is not None:
-
-            print(
-                f"Days Remaining:  "
-                f"{days_remaining}"
-            )
+        print(
+            f"Days Remaining:  "
+            f"{application['days_remaining']}"
+        )
 
         print(
             f"Human Approved:  "
-            f"{bool(human_approved)}"
+            f"{bool(application['human_approved'])}"
         )
 
         print(
             f"Reviewer:        "
-            f"{reviewer or 'None'}"
+            f"{application['reviewer']}"
         )
 
         print(
             f"Updated:         "
-            f"{updated}"
+            f"{application['last_updated']}"
         )
 
 
+# ============================================================
+# SAFETY STATUS
+# ============================================================
+
 def print_safety_status():
     """
-    Display the safety guarantees of the tracker.
+    Display application safety controls.
     """
 
     print()
@@ -1193,38 +1548,138 @@ def print_safety_status():
     )
 
     print(
-        "Automatic submission: False"
+        "-" * 70
     )
 
     print(
-        "Automatic application: False"
+        f"Automatic submission: "
+        f"{AUTOMATIC_SUBMISSION}"
     )
 
     print(
-        "Automatic email: False"
+        f"Automatic application: "
+        f"{AUTOMATIC_APPLICATION}"
     )
 
     print(
-        "Automatic job submission: False"
+        f"Automatic email: "
+        f"{AUTOMATIC_EMAIL}"
     )
 
     print(
-        "Deadline monitoring only produces information "
-        "and warnings."
+        f"Automatic job submission: "
+        f"{AUTOMATIC_JOB_SUBMISSION}"
     )
 
+    print(
+        f"Automatic approval: "
+        f"{AUTOMATIC_APPROVAL}"
+    )
+
+    print(
+        f"Human approval required: "
+        f"{HUMAN_REVIEW_REQUIRED}"
+    )
+
+    print(
+        "Deadline monitoring only produces "
+        "information and warnings."
+    )
+
+
+# ============================================================
+# SAFETY TEST
+# ============================================================
+
+def automatic_approval_test():
+    """
+    Demonstrate that automatic approval is blocked.
+    """
+
+    print(
+        "Attempting automatic approval..."
+    )
+
+    if AUTOMATIC_APPROVAL:
+
+        print(
+            "Automatic approval: "
+            "NOT ALLOWED"
+        )
+
+        return False
+
+    print(
+        "Automatic approval: "
+        "BLOCKED BY DESIGN"
+    )
+
+    return False
+
+
+# ============================================================
+# CURRENT APPLICATION DISPLAY
+# ============================================================
+
+def print_current_application(
+    job_id
+):
+    """
+    Display one application's important fields.
+    """
+
+    application = get_application(
+        job_id
+    )
+
+    if not application:
+
+        print(
+            "Application not found."
+        )
+
+        return
+
+    print(
+        f"Application found: "
+        f"{application['job_id']}"
+    )
+
+    print(
+        f"Status: "
+        f"{application['application_status']}"
+    )
+
+    print(
+        f"Human Approved: "
+        f"{bool(application['human_approved'])}"
+    )
+
+    print(
+        f"Reviewer: "
+        f"{application['reviewer']}"
+    )
+
+
+# ============================================================
+# TEST MAIN
+# ============================================================
 
 def main():
 
     print()
 
     print(
-        "APPLICATION TRACKER TEST - VERSION 4"
+        "APPLICATION TRACKER TEST - VERSION 6"
     )
 
     print(
         "=" * 70
     )
+
+    # --------------------------------------------------------
+    # STEP 1
+    # --------------------------------------------------------
 
     print()
 
@@ -1235,10 +1690,6 @@ def main():
     print(
         DATABASE_PATH
     )
-
-    # --------------------------------------------------
-    # STEP 1
-    # --------------------------------------------------
 
     print()
 
@@ -1256,9 +1707,9 @@ def main():
         "Database ready."
     )
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 2
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1277,8 +1728,7 @@ def main():
     if existing:
 
         print(
-            f"Application exists: "
-            f"job_001"
+            "Application exists: job_001"
         )
 
         print(
@@ -1289,12 +1739,12 @@ def main():
     else:
 
         print(
-            "job_001 is not currently tracked."
+            "Application does not exist: job_001"
         )
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 3
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1306,19 +1756,17 @@ def main():
         "-" * 70
     )
 
-    if existing:
+    refresh_deadline_status(
+        "job_001"
+    )
 
-        refresh_deadline_status(
-            "job_001"
-        )
+    print_deadline_status(
+        "job_001"
+    )
 
-        print_deadline_status(
-            "job_001"
-        )
-
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 4
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1330,31 +1778,13 @@ def main():
         "-" * 70
     )
 
-    application = get_application(
+    print_current_application(
         "job_001"
     )
 
-    if application:
-
-        print(
-            f"Application found: "
-            f"job_001"
-        )
-
-        print(
-            f"Status: "
-            f"{application[12]}"
-        )
-
-    else:
-
-        print(
-            "Application not found."
-        )
-
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 5
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1366,18 +1796,11 @@ def main():
         "-" * 70
     )
 
-    print(
-        "Attempting automatic approval..."
-    )
+    automatic_approval_test()
 
-    print(
-        "Automatic approval: "
-        "BLOCKED BY DESIGN"
-    )
-
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 6
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1389,11 +1812,11 @@ def main():
         "-" * 70
     )
 
-    list_applications()
+    print_application_list()
 
-    # --------------------------------------------------
+    # --------------------------------------------------------
     # STEP 7
-    # --------------------------------------------------
+    # --------------------------------------------------------
 
     print()
 
@@ -1403,13 +1826,26 @@ def main():
 
     print_safety_status()
 
+    # --------------------------------------------------------
+    # COMPLETE
+    # --------------------------------------------------------
+
     print()
 
     print(
         "APPLICATION TRACKER TEST COMPLETE"
     )
 
+    print(
+        "=" * 70
+    )
+
+
+# ============================================================
+# ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
 
     main()
+
