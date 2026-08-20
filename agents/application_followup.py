@@ -27,21 +27,23 @@ from application_tracker import (
     initialize_database,
     get_application,
     update_status,
+    VALID_STATUSES,
+    ALLOWED_STATUS_TRANSITIONS,
 )
 
 
 # ============================================================
-# ALLOWED FOLLOW-UP STATUSES
+# STATUS POLICY HELPERS
 # ============================================================
 
-FOLLOWUP_STATUSES = {
-    "submitted",
-
-    "interview",
-    "rejected",
-    "offer",
-    "withdrawn"
-}
+def get_allowed_followup_statuses(
+    current_status
+):
+    # The application tracker is the single source of truth.
+    return ALLOWED_STATUS_TRANSITIONS.get(
+        current_status,
+        []
+    )
 
 
 # ============================================================
@@ -147,11 +149,11 @@ def validate_application(
     # Status
     # --------------------------------------------------------
 
-    if status not in FOLLOWUP_STATUSES:
+    if status not in VALID_STATUSES:
 
         errors.append(
             f"Current status '{status}' is not a "
-            "valid follow-up status."
+            "valid application status."
         )
 
     return errors
@@ -241,27 +243,45 @@ def update_application_status(
         return False
 
     # --------------------------------------------------------
-    # Validate target status
+    # Validate target status using core transition policy
     # --------------------------------------------------------
 
-    if new_status not in FOLLOWUP_STATUSES:
+    allowed_statuses = (
+        get_allowed_followup_statuses(
+            current_status
+        )
+    )
+
+    if new_status not in allowed_statuses:
 
         print()
 
         print(
-            "INVALID STATUS"
+            "INVALID STATUS TRANSITION"
         )
 
         print(
-            f"Allowed statuses:"
+            f"Current status: {current_status}"
         )
 
-        for status in sorted(
-            FOLLOWUP_STATUSES
-        ):
+        print(
+            "Allowed next statuses:"
+        )
+
+        if allowed_statuses:
+
+            for status in sorted(
+                allowed_statuses
+            ):
+
+                print(
+                    f"  {status}"
+                )
+
+        else:
 
             print(
-                f"  {status}"
+                "  NONE"
             )
 
         return False
@@ -524,13 +544,29 @@ def run_followup(
         "-" * 70
     )
 
+    current_status = application.get(
+        "application_status"
+    )
+
+    allowed_statuses = (
+        get_allowed_followup_statuses(
+            current_status
+        )
+    )
+
     for status in sorted(
-        FOLLOWUP_STATUSES
+        allowed_statuses
     ):
 
         print(
             f"  {status:15} "
             f"- {describe_status(status)}"
+        )
+
+    if not allowed_statuses:
+
+        print(
+            "  No status transitions are currently allowed."
         )
 
     print()
