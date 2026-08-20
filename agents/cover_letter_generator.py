@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 from docx import Document
@@ -14,6 +15,8 @@ from docx.oxml.ns import qn
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
+
 PRIVATE_RESUME = (
     BASE_DIR
     / "resumes"
@@ -26,7 +29,7 @@ TAILORING_PLAN = (
     / "resumes"
     / "private"
     / "tailoring"
-    / "job_001_tailoring_plan.json"
+    / f"{JOB_ID}_tailoring_plan.json"
 )
 
 OUTPUT_DIR = (

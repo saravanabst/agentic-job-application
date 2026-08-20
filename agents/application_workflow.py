@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import json
 from pathlib import Path
 from datetime import datetime
@@ -17,7 +17,10 @@ sys.path.insert(
     str(AGENTS_DIR)
 )
 
-JOB_ID = "job_001"
+if len(sys.argv) > 1:
+    JOB_ID = sys.argv[1]
+else:
+    JOB_ID = "job_001"
 
 
 PACKAGE_DIR = (

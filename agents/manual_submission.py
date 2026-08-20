@@ -9,7 +9,7 @@ from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-JOB_ID = "job_001"
+JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
 
 PIPELINE_VERSION = "VERSION 1"
 

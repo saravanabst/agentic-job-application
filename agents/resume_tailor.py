@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 
@@ -7,6 +8,8 @@ from pathlib import Path
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
 
 PRIVATE_RESUME = (
     BASE_DIR
@@ -25,7 +28,7 @@ JOB_FILE = (
     BASE_DIR
     / "jobs"
     / "raw"
-    / "job_001.json"
+    / f"{JOB_ID}.json"
 )
 
 OUTPUT_DIR = (
@@ -408,19 +411,44 @@ def find_matching_skills(
     preferred_skills,
     candidate_skills
 ):
-    """Match job requirements against candidate skills."""
+    """Match job requirements against candidate skills using aliases."""
 
-    candidate_lookup = {
-        normalize(skill): skill
+    aliases = load_skill_aliases()
+
+    candidate_normalized = {
+        normalize(skill)
         for skill in candidate_skills
     }
+
+    def skill_is_matched(skill):
+        """Return True when the candidate has the skill or a configured alias."""
+
+        skill_terms = [
+            normalize(skill)
+        ]
+
+        skill_aliases = aliases.get(
+            skill,
+            []
+        )
+
+        if isinstance(skill_aliases, list):
+            skill_terms.extend(
+                normalize(alias)
+                for alias in skill_aliases
+            )
+
+        return any(
+            term in candidate_normalized
+            for term in skill_terms
+        )
 
     required_matched = []
     required_gaps = []
 
     for skill in required_skills:
 
-        if normalize(skill) in candidate_lookup:
+        if skill_is_matched(skill):
             required_matched.append(skill)
         else:
             required_gaps.append(skill)
@@ -430,7 +458,7 @@ def find_matching_skills(
 
     for skill in preferred_skills:
 
-        if normalize(skill) in candidate_lookup:
+        if skill_is_matched(skill):
             preferred_matched.append(skill)
         else:
             preferred_gaps.append(skill)

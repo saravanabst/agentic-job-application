@@ -1430,40 +1430,41 @@ def print_deadline_status(
 
     if status == "EXPIRED":
 
-        print(
-            "WARNING: Application deadline has passed."
-        )
+    	print(
+        "WARNING: Application deadline has passed."
+    	)
 
     elif status == "URGENT":
 
-        print(
-            "WARNING: Application deadline is today."
-        )
+    	if days_remaining == 0:
 
-    elif status == "URGENT":
+        	print(
+            	"WARNING: Application deadline is today."
+        	)
 
-        print(
-            "WARNING: Application deadline is within 3 days."
-        )
+    	else:
+
+        	print(
+            	"WARNING: Application deadline is within 3 days."
+        	)
 
     elif status == "ACTIVE":
 
-        print(
-            "Deadline is upcoming."
-        )
+     	print(
+        "Deadline is upcoming."
+    	)
 
     elif status == "NO_DEADLINE":
 
-        print(
-            "No application deadline was provided."
-        )
+    	print(
+        "No application deadline was provided."
+    	)
 
     elif status == "INVALID_DEADLINE":
 
-        print(
-            "WARNING: Deadline requires human review."
-        )
-
+    	print(
+        "WARNING: Deadline requires human review."
+    	)
 
 # ============================================================
 # LIST APPLICATIONS

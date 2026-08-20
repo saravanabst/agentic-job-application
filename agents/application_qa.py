@@ -1,23 +1,26 @@
 import json
+import sys
 from pathlib import Path
 from datetime import datetime
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
+
 TAILORING_PLAN = (
     BASE_DIR
     / "resumes"
     / "private"
     / "tailoring"
-    / "job_001_tailoring_plan.json"
+    / f"{JOB_ID}_tailoring_plan.json"
 )
 
 PACKAGE_DIR = (
     BASE_DIR
     / "resumes"
     / "output"
-    / "job_001"
+    / JOB_ID
     / "application_package"
 )
 

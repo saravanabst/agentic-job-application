@@ -167,9 +167,20 @@ def describe_status(status):
 
     descriptions = {
 
+        "not_applied":
+            "Job has been discovered but no application preparation has started.",
+
+        "review_required":
+            "Application requires review before preparation can continue.",
+
+        "application_prepared":
+            "Application package has been prepared and is awaiting human approval.",
+
+        "approved":
+            "Application has been approved by a human reviewer and is awaiting manual submission.",
+
         "submitted":
             "Application has been manually submitted.",
-
 
         "interview":
             "Candidate has been invited to interview.",

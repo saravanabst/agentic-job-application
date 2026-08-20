@@ -1,5 +1,6 @@
 import json
 import shutil
+import sys
 from pathlib import Path
 
 
@@ -9,19 +10,21 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
+
 TAILORING_PLAN = (
     BASE_DIR
     / "resumes"
     / "private"
     / "tailoring"
-    / "job_001_tailoring_plan.json"
+    / f"{JOB_ID}_tailoring_plan.json"
 )
 
 RESUME_PDF = (
     BASE_DIR
     / "resumes"
     / "output"
-    / "job_001"
+    / JOB_ID
     / "tailored"
     / "resume.pdf"
 )
@@ -30,7 +33,7 @@ COVER_LETTER_PDF = (
     BASE_DIR
     / "resumes"
     / "output"
-    / "job_001"
+    / JOB_ID
     / "cover_letter"
     / "cover_letter.pdf"
 )
@@ -39,7 +42,7 @@ PACKAGE_DIR = (
     BASE_DIR
     / "resumes"
     / "output"
-    / "job_001"
+    / JOB_ID
     / "application_package"
 )
 
