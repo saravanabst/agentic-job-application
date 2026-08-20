@@ -45,6 +45,52 @@ VALID_STATUSES = [
     "withdrawn"
 ]
 
+# ============================================================
+# ALLOWED STATUS TRANSITIONS
+# ============================================================
+
+ALLOWED_STATUS_TRANSITIONS = {
+
+    "not_applied": [
+        "review_required",
+        "withdrawn"
+    ],
+
+    "review_required": [
+        "application_prepared",
+        "withdrawn"
+    ],
+
+    "application_prepared": [
+        "approved",
+        "withdrawn"
+    ],
+
+    "approved": [
+        "submitted",
+        "withdrawn"
+    ],
+
+    "submitted": [
+        "rejected",
+        "interview",
+        "withdrawn"
+    ],
+
+    "rejected": [],
+
+    "interview": [
+        "offer",
+        "withdrawn"
+    ],
+
+    "offer": [
+        "withdrawn"
+    ],
+
+    "withdrawn": []
+}
+
 
 # ============================================================
 # DEADLINE STATUSES
@@ -793,10 +839,12 @@ def update_status(
     """
     Update application status safely.
 
-    Important:
-    - approved requires human approval
-    - submitted requires human approval
-    - expired applications cannot be submitted
+    Enforces:
+    - valid application statuses
+    - allowed status transitions
+    - human approval for approved
+    - human approval for submitted
+    - deadline safety for submitted
     """
 
     if new_status not in VALID_STATUSES:
@@ -830,6 +878,35 @@ def update_status(
     deadline_status = application[
         "deadline_status"
     ]
+
+    # --------------------------------------------------------
+    # STATUS TRANSITION SAFETY
+    # --------------------------------------------------------
+
+    allowed_next_statuses = (
+        ALLOWED_STATUS_TRANSITIONS.get(
+            current_status,
+            []
+        )
+    )
+
+    if new_status not in allowed_next_statuses:
+
+        print(
+            "STATUS UPDATE BLOCKED:"
+        )
+
+        print(
+            f"Invalid transition: "
+            f"{current_status} -> {new_status}"
+        )
+
+        print(
+            "Allowed next statuses: "
+            f"{allowed_next_statuses or 'NONE'}"
+        )
+
+        return False
 
     # --------------------------------------------------------
     # APPROVAL SAFETY
@@ -870,9 +947,9 @@ def update_status(
             return False
 
         if deadline_status in (
-    	    "EXPIRED",
-    	    "INVALID_DEADLINE"
-	    ):
+            "EXPIRED",
+            "INVALID_DEADLINE"
+        ):
 
             print(
                 "SUBMISSION BLOCKED:"
