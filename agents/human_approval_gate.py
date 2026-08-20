@@ -54,6 +54,7 @@ from application_tracker import (
     initialize_database,
     get_application,
     set_human_approval,
+    update_status,
 )
 
 
@@ -579,6 +580,24 @@ def request_human_approval(
 
         print(
             "APPROVAL FAILED"
+        )
+
+        return False
+
+    # STATUS TRANSITION
+    # update_status() is the single authority for application status.
+
+    status_updated = update_status(
+        job_id,
+        "approved"
+    )
+
+    if not status_updated:
+
+        print()
+
+        print(
+            "STATUS TRANSITION FAILED"
         )
 
         return False

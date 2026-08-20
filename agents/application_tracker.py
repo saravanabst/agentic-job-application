@@ -68,7 +68,8 @@ ALLOWED_STATUS_TRANSITIONS = {
 
     "approved": [
         "submitted",
-        "withdrawn"
+        "withdrawn",
+        "review_required"
     ],
 
     "submitted": [
@@ -1102,16 +1103,6 @@ def set_human_approval(
 
                 approved_at = ?,
 
-                application_status =
-                    CASE
-                        WHEN application_status
-                        IN ('not_applied',
-                            'review_required',
-                            'application_prepared')
-                        THEN 'approved'
-                        ELSE application_status
-                    END,
-
                 last_updated = ?
 
             WHERE job_id = ?
@@ -1141,13 +1132,6 @@ def set_human_approval(
 
                 approved_at = NULL,
 
-                application_status =
-                    CASE
-                        WHEN application_status = 'approved'
-                        THEN 'review_required'
-                        ELSE application_status
-                    END,
-
                 last_updated = ?
 
             WHERE job_id = ?
@@ -1176,8 +1160,12 @@ def set_human_approval(
         )
 
         print(
-            "Application status may now "
-            "be approved."
+            "Human approval recorded."
+        )
+
+        print(
+            "Status transition must be performed "
+            "through update_status()."
         )
 
     else:
@@ -1925,4 +1913,3 @@ def main():
 if __name__ == "__main__":
 
     main()
-
