@@ -474,6 +474,33 @@ def check_application_tracker():
 
         return False
 
+    status = application.get(
+        "application_status"
+    )
+
+    if status != "application_prepared":
+
+        print()
+
+        print(
+            "WORKFLOW BLOCKED"
+        )
+
+        print(
+            "Human approval workflow requires "
+            "application_prepared status."
+        )
+
+        print(
+            f"Current status: {status}"
+        )
+
+        print(
+            "No human approval request will be made."
+        )
+
+        return False
+
     print(
         f"Job ID:          "
         f"{application.get('job_id', '')}"
