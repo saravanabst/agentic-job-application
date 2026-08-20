@@ -407,11 +407,7 @@ def validate_tracker_application(job_id):
     # Invalid status
     # --------------------------------------------------------
 
-    if status not in (
-        "not_applied",
-        "review_required",
-        "application_prepared"
-    ):
+    if status != "application_prepared":
 
         errors.append(
             f"Application tracker status is "
@@ -599,6 +595,27 @@ def request_human_approval(
         print(
             "STATUS TRANSITION FAILED"
         )
+
+        print(
+            "Rolling back human approval."
+        )
+
+        rollback = set_human_approval(
+            job_id,
+            False
+        )
+
+        if not rollback:
+
+            print()
+
+            print(
+                "CRITICAL SAFETY FAILURE"
+            )
+
+            print(
+                "Human approval rollback failed."
+            )
 
         return False
 
