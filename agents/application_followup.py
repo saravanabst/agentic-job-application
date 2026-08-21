@@ -615,6 +615,10 @@ def get_followup_recommendation(
         "deadline_status"
     )
 
+    submitted_at = application.get(
+        "submitted_at"
+    )
+
     human_approved = bool(
         application.get(
             "human_approved",
@@ -676,6 +680,27 @@ def get_followup_recommendation(
 
     if status == "submitted":
 
+        submitted_days = None
+
+        if submitted_at:
+
+            try:
+
+                submitted_datetime = (
+                    datetime.fromisoformat(
+                        submitted_at
+                    )
+                )
+
+                submitted_days = (
+                    datetime.now()
+                    - submitted_datetime
+                ).days
+
+            except ValueError:
+
+                submitted_days = None
+
         if deadline_status == "URGENT":
 
             return {
@@ -684,6 +709,28 @@ def get_followup_recommendation(
                     "Application has been submitted and the "
                     "deadline is urgent. Monitor employer communication closely."
             }
+
+        if submitted_days is not None:
+
+            if submitted_days >= 7:
+
+                return {
+                    "action": "FOLLOW-UP RECOMMENDED",
+                    "reason":
+                        "Application has been submitted for "
+                        f"{submitted_days} days. Consider a human follow-up "
+                        "with the employer."
+                }
+
+            if submitted_days >= 3:
+
+                return {
+                    "action": "MONITOR APPLICATION",
+                    "reason":
+                        "Application has been submitted for "
+                        f"{submitted_days} days. Continue monitoring "
+                        "for employer communication."
+                }
 
         return {
             "action": "WAIT FOR EMPLOYER RESPONSE",
