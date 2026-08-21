@@ -216,6 +216,30 @@ def initialize_database():
     connection.commit()
 
     # --------------------------------------------------------
+    # STATUS HISTORY TABLE
+    # --------------------------------------------------------
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS application_status_history (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            job_id TEXT NOT NULL,
+
+            previous_status TEXT,
+
+            new_status TEXT NOT NULL,
+
+            changed_at TEXT NOT NULL
+
+        )
+        """
+    )
+
+    connection.commit()
+
+    # --------------------------------------------------------
     # MIGRATION
     # --------------------------------------------------------
 
@@ -1021,6 +1045,31 @@ def update_status(
             submitted_at,
 
             job_id
+        )
+    )
+
+    # --------------------------------------------------------
+    # STATUS HISTORY
+    # --------------------------------------------------------
+
+    cursor.execute(
+        """
+        INSERT INTO application_status_history (
+
+            job_id,
+            previous_status,
+            new_status,
+            changed_at
+
+        )
+
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            job_id,
+            current_status,
+            new_status,
+            now
         )
     )
 
