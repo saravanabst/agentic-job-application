@@ -32,6 +32,13 @@ from application_tracker import (
     ALLOWED_STATUS_TRANSITIONS,
 )
 
+# ============================================================
+# IMPORT EMPLOYER RESPONSE INTELLIGENCE
+# ============================================================
+
+from employer_response import (
+    analyze_response,
+)
 
 # ============================================================
 # STATUS POLICY HELPERS
@@ -105,6 +112,151 @@ def print_application(application):
         )
 
     print()
+
+# ============================================================
+# EMPLOYER RESPONSE DISPLAY
+# ============================================================
+
+def print_employer_response_analysis(
+    response_text
+):
+    """
+    Display employer-response intelligence.
+
+    This function only displays the recommendation.
+    It does NOT update application status.
+    """
+
+    analysis = analyze_response(
+        response_text
+    )
+
+    print()
+
+    print(
+        "EMPLOYER RESPONSE INTELLIGENCE"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    print(
+        f"{'Category':20}: "
+        f"{analysis['category'].upper()}"
+    )
+
+    print(
+        f"{'Matched phrase':20}: "
+        f"{analysis['matched_keyword']}"
+    )
+
+    print(
+        f"{'Reason':20}: "
+        f"{analysis['reason']}"
+    )
+
+    print(
+        f"{'Recommended status':20}: "
+        f"{analysis['recommended_status']}"
+    )
+
+    print(
+        f"{'Human action required':20}: "
+        f"{analysis['human_action_required']}"
+    )
+
+    print(
+        f"{'Database status changed':20}: NO"
+    )
+
+    print()
+
+# ============================================================
+# EMPLOYER RESPONSE TRANSITION VALIDATION
+# ============================================================
+
+def validate_employer_response_transition(
+    job_id,
+    response_text
+):
+    """
+    Validate an employer-response recommendation
+    against the application's current status.
+
+    This function is read-only.
+
+    It does NOT update application status.
+    """
+
+    application = get_application(
+        job_id
+    )
+
+    if not application:
+
+        return {
+            "valid": False,
+            "reason": "Application not found.",
+            "current_status": None,
+            "recommended_status": None,
+        }
+
+    current_status = application.get(
+        "application_status"
+    )
+
+    analysis = analyze_response(
+        response_text
+    )
+
+    recommended_status = analysis.get(
+        "recommended_status"
+    )
+
+    if recommended_status is None:
+
+        return {
+            "valid": False,
+            "reason":
+                "No actionable employer response "
+                "recommendation was detected.",
+            "current_status":
+                current_status,
+            "recommended_status":
+                None,
+        }
+
+    allowed_statuses = (
+        get_allowed_followup_statuses(
+            current_status
+        )
+    )
+
+    if recommended_status not in allowed_statuses:
+
+        return {
+            "valid": False,
+            "reason":
+                f"Transition {current_status} -> "
+                f"{recommended_status} is not allowed "
+                "by the application tracker.",
+            "current_status":
+                current_status,
+            "recommended_status":
+                recommended_status,
+        }
+
+    return {
+        "valid": True,
+        "reason":
+            f"Transition {current_status} -> "
+            f"{recommended_status} is allowed.",
+        "current_status":
+            current_status,
+        "recommended_status":
+            recommended_status,
+    }
 
 # ============================================================
 # STATUS HISTORY
@@ -903,6 +1055,85 @@ def run_followup(
             )
 
         return False
+
+    # --------------------------------------------------------
+    # EMPLOYER RESPONSE INTELLIGENCE
+    # --------------------------------------------------------
+
+    print()
+
+    print(
+        "EMPLOYER RESPONSE"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    response_text = input(
+        "Paste employer response, or press Enter to skip: "
+    ).strip()
+
+    if response_text:
+
+        print_employer_response_analysis(
+            response_text
+        )
+
+        transition_check = (
+            validate_employer_response_transition(
+                job_id,
+                response_text
+            )
+        )
+
+        print()
+
+        print(
+            "EMPLOYER RESPONSE TRANSITION CHECK"
+        )
+
+        print(
+            "-" * 70
+        )
+
+        print(
+            f"Valid transition     : "
+            f"{transition_check['valid']}"
+        )
+
+        print(
+            f"Current status       : "
+            f"{transition_check['current_status']}"
+        )
+
+        print(
+            f"Recommended status  : "
+            f"{transition_check['recommended_status']}"
+        )
+
+        print(
+            f"Reason               : "
+            f"{transition_check['reason']}"
+        )
+
+        print()
+
+        print(
+            "IMPORTANT:"
+        )
+
+        print(
+            "Employer-response intelligence does NOT "
+            "change the database status automatically."
+        )
+
+        print(
+            "Any status change must be performed "
+            "through the normal human-controlled workflow."
+        )
+
+        print()
 
     current_status = application.get(
         "application_status"
