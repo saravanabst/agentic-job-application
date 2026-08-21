@@ -587,6 +587,215 @@ def update_application_status(
 
     return True
 
+# ============================================================
+# FOLLOW-UP INTELLIGENCE
+# ============================================================
+
+def get_followup_recommendation(
+    application
+):
+    """
+    Return a read-only follow-up recommendation.
+
+    This function NEVER changes application status.
+    """
+
+    if not application:
+
+        return {
+            "action": "STOP",
+            "reason": "Application does not exist."
+        }
+
+    status = application.get(
+        "application_status"
+    )
+
+    deadline_status = application.get(
+        "deadline_status"
+    )
+
+    human_approved = bool(
+        application.get(
+            "human_approved",
+            0
+        )
+    )
+
+    # --------------------------------------------------------
+    # Terminal states
+    # --------------------------------------------------------
+
+    if status == "rejected":
+
+        return {
+            "action": "CLOSE",
+            "reason":
+                "Application was rejected. "
+                "No further follow-up is required."
+        }
+
+    if status == "withdrawn":
+
+        return {
+            "action": "CLOSE",
+            "reason":
+                "Application was withdrawn. "
+                "No further follow-up is required."
+        }
+
+    # --------------------------------------------------------
+    # Offer
+    # --------------------------------------------------------
+
+    if status == "offer":
+
+        return {
+            "action": "REVIEW OFFER",
+            "reason":
+                "Employer has made an offer. "
+                "Review the offer and decide the next human action."
+        }
+
+    # --------------------------------------------------------
+    # Interview
+    # --------------------------------------------------------
+
+    if status == "interview":
+
+        return {
+            "action": "PREPARE FOR INTERVIEW",
+            "reason":
+                "Interview has been received. "
+                "Prepare for the interview and monitor employer communication."
+        }
+
+    # --------------------------------------------------------
+    # Submitted
+    # --------------------------------------------------------
+
+    if status == "submitted":
+
+        if deadline_status == "URGENT":
+
+            return {
+                "action": "MONITOR CLOSELY",
+                "reason":
+                    "Application has been submitted and the "
+                    "deadline is urgent. Monitor employer communication closely."
+            }
+
+        return {
+            "action": "WAIT FOR EMPLOYER RESPONSE",
+            "reason":
+                "Application has been submitted. "
+                "Monitor for employer communication."
+        }
+
+    # --------------------------------------------------------
+    # Approved
+    # --------------------------------------------------------
+
+    if status == "approved":
+
+        return {
+            "action": "MANUAL SUBMISSION REQUIRED",
+            "reason":
+                "Application has been approved by a human. "
+                "Submit the application manually and then record "
+                "the submitted status."
+        }
+
+    # --------------------------------------------------------
+    # Application prepared
+    # --------------------------------------------------------
+
+    if status == "application_prepared":
+
+        if not human_approved:
+
+            return {
+                "action": "HUMAN REVIEW REQUIRED",
+                "reason":
+                    "Application package is prepared but "
+                    "human approval has not been recorded."
+            }
+
+        return {
+            "action": "READY FOR APPROVAL",
+            "reason":
+                "Application package is prepared and ready "
+                "for the approval workflow."
+        }
+
+    # --------------------------------------------------------
+    # Review required
+    # --------------------------------------------------------
+
+    if status == "review_required":
+
+        return {
+            "action": "REVIEW APPLICATION",
+            "reason":
+                "Application requires human review before "
+                "preparation can continue."
+        }
+
+    # --------------------------------------------------------
+    # Not applied
+    # --------------------------------------------------------
+
+    if status == "not_applied":
+
+        return {
+            "action": "BEGIN APPLICATION REVIEW",
+            "reason":
+                "No application preparation has started."
+        }
+
+    # --------------------------------------------------------
+    # Unknown status
+    # --------------------------------------------------------
+
+    return {
+        "action": "STOP",
+        "reason":
+            f"No recommendation is defined for status '{status}'."
+    }
+
+
+def print_followup_recommendation(
+    application
+):
+    """
+    Display the read-only follow-up recommendation.
+    """
+
+    recommendation = get_followup_recommendation(
+        application
+    )
+
+    print()
+
+    print(
+        "FOLLOW-UP RECOMMENDATION"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    print(
+        f"Recommended Action: "
+        f"{recommendation['action']}"
+    )
+
+    print(
+        f"Reason: "
+        f"{recommendation['reason']}"
+    )
+
+    print()
 
 # ============================================================
 # INTERACTIVE FOLLOW-UP
@@ -620,6 +829,10 @@ def run_followup(
 
     print_status_history(
         job_id
+    )
+
+    print_followup_recommendation(
+        application
     )
 
     # --------------------------------------------------------
