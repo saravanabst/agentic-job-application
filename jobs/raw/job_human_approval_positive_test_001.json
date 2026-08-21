@@ -1,0 +1,24 @@
+{
+    "job_id": "job_human_approval_positive_test_001",
+    "source": "test",
+    "source_job_id": "TEST-HUMAN-APPROVAL-001",
+    "company": "Human Approval Test Analytics",
+    "title": "Data Analyst",
+    "location": "Auckland, New Zealand",
+    "work_mode": "Hybrid",
+    "employment_type": "Full-time",
+    "url": "",
+    "description": "We are looking for a Data Analyst to support business reporting and analytics. Required skills include SQL, Python, Excel, Tableau, data cleaning and reporting. Experience building dashboards is desirable. Preferred skills include Power BI and Machine Learning. Candidates should have experience working with business stakeholders and producing analytical reports.",
+    "requirements": {
+        "required_skills": [],
+        "preferred_skills": [],
+        "experience_requirements": [],
+        "education_requirements": [],
+        "work_rights_requirements": []
+    },
+    "application_deadline": "2026-12-31 17:00",
+    "application_status": "not_applied",
+    "discovered_at": "",
+    "processed_at": "",
+    "notes": ""
+}

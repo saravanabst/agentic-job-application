@@ -12,6 +12,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 JOB_ID = sys.argv[1] if len(sys.argv) > 1 else "job_001"
 
+# ============================================================
+# IMPORT APPLICATION TRACKER
+# ============================================================
+
+sys.path.insert(0, str(BASE_DIR / "agents"))
+
+from application_tracker import (
+    initialize_database,
+    get_application,
+    update_status,
+)
+
 TAILORING_PLAN = (
     BASE_DIR
     / "resumes"
