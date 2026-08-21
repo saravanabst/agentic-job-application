@@ -39,9 +39,9 @@ Desktop.ini
 # Application tracking database
 applications/data/
 
-# Application tracking database
-applications/data/
-
 # Private candidate information
 resumes/private/
 
+
+# Pytest cache
+.pytest_cache/
