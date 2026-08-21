@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 from pathlib import Path
 from datetime import datetime
 
@@ -105,6 +106,118 @@ def print_application(application):
 
     print()
 
+# ============================================================
+# STATUS HISTORY
+# ============================================================
+
+def get_status_history(
+    job_id
+):
+    """
+    Return the complete status history for an application.
+
+    History is read directly from the authoritative
+    application_status_history table.
+
+    This function is read-only.
+    """
+
+    database_path = (
+        BASE_DIR
+        / "applications"
+        / "data"
+        / "applications.db"
+    )
+
+    connection = sqlite3.connect(
+        database_path
+    )
+
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            previous_status,
+            new_status,
+            changed_at
+        FROM application_status_history
+        WHERE job_id = ?
+        ORDER BY id
+        """,
+        (
+            job_id,
+        )
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return [
+        dict(row)
+        for row in rows
+    ]
+
+
+def print_status_history(
+    job_id
+):
+    """
+    Display the complete application status history.
+    """
+
+    history = get_status_history(
+        job_id
+    )
+
+    print()
+
+    print(
+        "STATUS HISTORY"
+    )
+
+    print(
+        "-" * 70
+    )
+
+    if not history:
+
+        print(
+            "No status history found."
+        )
+
+        return
+
+    for entry in history:
+
+        previous_status = (
+            entry.get(
+                "previous_status"
+            )
+        )
+
+        new_status = (
+            entry.get(
+                "new_status"
+            )
+        )
+
+        changed_at = (
+            entry.get(
+                "changed_at"
+            )
+        )
+
+        print(
+            f"{changed_at:20} "
+            f"{previous_status:20} "
+            f"-> {new_status}"
+        )
+
+    print()
 
 # ============================================================
 # VALIDATE APPLICATION
@@ -503,6 +616,10 @@ def run_followup(
 
     print_application(
         application
+    )
+
+    print_status_history(
+        job_id
     )
 
     # --------------------------------------------------------
